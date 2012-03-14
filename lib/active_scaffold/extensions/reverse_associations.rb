@@ -45,7 +45,8 @@ module ActiveRecord
 
               # skip over has_many :through associations
               next if assoc.options[:through]
-              next unless assoc.options[:polymorphic] or assoc.class_name == self.active_record.name
+
+              next unless assoc.options[:polymorphic] or assoc.klass == self.active_record
 
               case [assoc.macro, self.macro].find_all{|m| m == :has_and_belongs_to_many}.length
                 # if both are a habtm, then match them based on the join table
