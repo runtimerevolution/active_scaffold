@@ -29,6 +29,15 @@ module ActiveRecord
               next unless assoc.options[:through]
               next unless assoc.through_reflection.klass == self.through_reflection.klass
             else
+              # Skip over Refinery::PagePart::Translation
+              # TODO We are assuming these relations don't have an inverse relation, but this may
+              # not be accurate
+              # http://stackoverflow.com/questions/10135137/why-am-i-getting-an-uninitialized-constant-refinerypage-when-trying-to-seed-af
+              #puts "1) DEBUG - Association for #{klass} - #{assoc.class_name} - #{self.active_record}"
+              next if defined?(Refinery::Page::Translation) and ( klass == Refinery::Page::Translation )
+              next if defined?(Refinery::PagePart::Translation) and ( klass == Refinery::PagePart::Translation )
+              #puts "2) DEBUG - #{assoc.klass}"
+              
               # skip over has_many :through associations
               next if assoc.options[:through]
               next unless assoc.options[:polymorphic] or assoc.klass == self.active_record
