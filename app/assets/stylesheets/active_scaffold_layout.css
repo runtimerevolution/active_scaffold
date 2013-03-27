@@ -139,13 +139,6 @@ background-color: transparent;
 cursor: default;
 }
 
-.active-scaffold-header div.actions {
-position: absolute;
-right: 5px;
-top: 5px;
-text-align: right;
-}
-
 /* Table :: Column Headers
    ============================= */
 
@@ -203,6 +196,12 @@ padding: 0px;
 .active-scaffold tbody.records td.empty {
 text-align: center;
 }
+.active-scaffold tbody.records td.in_place_editor_field .handle {
+display:none;
+}
+.active-scaffold tbody.records td.in_place_editor_field.empty .handle {
+display:inline;
+}
 
 .active-scaffold td.numeric,
 .active-scaffold-calculations td {
@@ -258,6 +257,11 @@ line-height: 200%;
 display: none;
 width: 150px;
 right: 0px;
+z-index: 2;
+}
+.active-scaffold .actions .action_group.dyn ul {
+width: auto;
+display: block;
 }
 
 .active-scaffold .actions .action_group ul ul {
@@ -273,7 +277,7 @@ border-top: 1px dashed;
 display: block;
 position: relative;
 width: auto;
-z-index: 2;
+text-align: left;
 }
 
 .active-scaffold .actions .action_group ul li div {
@@ -289,6 +293,9 @@ z-index: 2;
   padding: 5px 5px 5px 25px;
   background-position: 5px 50%;
   background-repeat: no-repeat;
+}
+.active-scaffold .actions .action_group.dyn ul li a {
+  padding-left: 5px;
 }
 
 .active-scaffold .actions .action_group ul li.top {
@@ -433,6 +440,7 @@ border: none;
 .active-scaffold .empty-message, .active-scaffold .filtered-message {
 padding: 4px;
 text-align: center;
+position: relative;
 }
 
 .active-scaffold .message {
@@ -443,8 +451,20 @@ position: relative;
 margin: 2px 7px;
 line-height: 12px;
 }
+.active-scaffold .message .timestamp,
+.active-scaffold .message .message-content {
+display: inline;
+}
 
-.active-scaffold .message a {
+.active-scaffold .filtered-message .reset {
+position: absolute;
+display: inline;
+right: 10px;
+top: 4px;
+padding: 0;
+}
+
+.active-scaffold .message a.close {
 position: absolute;
 right: 10px;
 top: 4px;
@@ -593,6 +613,14 @@ float: none;
 padding: 2px;
 margin-left: 5px;
 list-style: none;
+}
+.active-scaffold ol:after {
+content: '.';
+visibility: hidden;
+line-height: 0;
+height: 0;
+display: block;
+clear: both;
 }
 
 .active-scaffold p.form-footer {
@@ -758,6 +786,11 @@ background: none;
 
 .active-scaffold .horizontal-sub-form td dt label {
 display: none;
+}
+
+.active-scaffold .horizontal-sub-form .associated-record dl {
+float: left;
+margin-right: 5px;
 }
 
 .active-scaffold .sub-form .checkbox-list {

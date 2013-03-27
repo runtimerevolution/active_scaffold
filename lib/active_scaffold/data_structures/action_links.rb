@@ -49,7 +49,7 @@ module ActiveScaffold::DataStructures
           collected = item[val]
           links << collected unless collected.nil?
         else
-          links << item if item.action == val.to_s
+          links << item if item.action.to_s == val.to_s
         end
       end
       links.first
@@ -70,8 +70,8 @@ module ActiveScaffold::DataStructures
 
     def delete(val)
       self.each({:include_set => true}) do |link, set|
-        if link.action == val.to_s
-          set.delete_if {|item| item.is_a?(ActiveScaffold::DataStructures::ActionLink) && item.action == val.to_s}
+        if link.action.to_s == val.to_s
+          set.delete link
         end
       end
     end
@@ -79,7 +79,7 @@ module ActiveScaffold::DataStructures
     def delete_group(name)
       @set.each do |group|
         if group.name == name
-          @set.delete_if {|item| item.is_a?(ActiveScaffold::DataStructures::ActionLinks) && item.name == name}
+          @set.delete group
         else
           group.delete_group(name)
         end if group.is_a?(ActiveScaffold::DataStructures::ActionLinks)
@@ -88,8 +88,9 @@ module ActiveScaffold::DataStructures
 
     # iterates over the links, possibly by type
     def each(options = {}, &block)
-      @set.each {|item|
-        if item.is_a?(ActiveScaffold::DataStructures::ActionLinks)
+      method = options[:reverse] ? :reverse_each : :each
+      @set.send(method) do |item|
+        if item.is_a?(ActiveScaffold::DataStructures::ActionLinks) && !options[:groups]
           item.each(options, &block)
         else
           if options[:include_set]
@@ -98,35 +99,13 @@ module ActiveScaffold::DataStructures
             yield item
           end
         end
-      }
+      end
     end
     
     def collect_by_type(type = nil)
       links = []
       subgroup(type).each(type) {|link| links << link}
       links
-    end
-
-    def traverse(controller, options = {}, &block)
-      traverse_method = options.delete(:reverse).nil? ? :each : :reverse_each
-      options[:level] ||= -1
-      options[:level] += 1
-      first_action = true
-      @set.send(traverse_method) do |link|
-        if link.is_a?(ActiveScaffold::DataStructures::ActionLinks)
-          unless link.empty?
-            yield(link, nil, {:node => :start_traversing, :first_action => first_action, :level => options[:level]})
-            link.traverse(controller,options, &block)
-            yield(link, nil, {:node => :finished_traversing, :first_action => first_action, :level => options[:level]})
-            first_action = false
-          end
-        elsif controller.nil? || !skip_action_link(controller, link, *(Array(options[:for])))
-          authorized = options[:for].nil? ? true : options[:for].authorized_for?(:crud_type => link.crud_type, :action => link.action)
-          yield(self, link, {:authorized => authorized, :first_action => first_action, :level => options[:level]})
-          first_action = false
-        end
-      end
-      options[:level] -= 1
     end
 
     def collect
@@ -171,10 +150,6 @@ module ActiveScaffold::DataStructures
     attr_accessor :name
 
     protected
-
-    def skip_action_link(controller, link, *args)
-      (!link.ignore_method.nil? && controller.respond_to?(link.ignore_method) && controller.send(link.ignore_method, *args)) || ((link.security_method_set? or controller.respond_to? link.security_method) and !controller.send(link.security_method, *args))
-    end
 
     # called during clone or dup. makes the clone/dup deeper.
     def initialize_copy(from)

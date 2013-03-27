@@ -1,0 +1,14 @@
+<% form_action ||= :create
+   cancel_link = true if cancel_link.nil? %>
+
+<% headline = as_(:create_nested_model,
+      			  :model => @record.class.model_name.human(:count => 1),
+	   		      :parent_model => nested.parent_model.find(nested.parent_id)
+   ) if ( form_action == :create and nested.present?) %>
+   
+<%= render :partial => "base_form", :locals => {:xhr => xhr ||= nil,
+                                                :form_action => form_action,
+                                                :method => method ||= :post,
+                                                :cancel_link => cancel_link,
+                                                :headline => headline ||= active_scaffold_config.send(form_action).label(active_scaffold_config.add_sti_create_links? ? @record.class.model_name.human(:count => 1) : nil)} %>
+

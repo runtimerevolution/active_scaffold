@@ -14,37 +14,42 @@ module ActiveScaffold
         else
           case search_ui
           when :integer, :decimal, :float
-            "#{column.active_record_class.human_attribute_name(column.name)} #{as_(value[:opt].downcase).downcase} #{format_number_value(controller.class.condition_value_for_numeric(column, value[:from]), column.options)} #{value[:opt] == 'BETWEEN' ? '- ' + format_number_value(controller.class.condition_value_for_numeric(column, value[:to]), column.options).to_s : ''}"
+            "#{column.active_record_class.human_attribute_name(column.name)} #{as_(value[:opt].downcase).downcase} #{format_number_value(controller.class.condition_value_for_numeric(column, value[:from]), column.options) if value[:from].present?} #{value[:opt] == 'BETWEEN' ? '- ' + format_number_value(controller.class.condition_value_for_numeric(column, value[:to]), column.options).to_s : ''}"
           when :string
             opt = ActiveScaffold::Finder::StringComparators.index(value[:opt]) || value[:opt]
             "#{column.active_record_class.human_attribute_name(column.name)} #{as_(opt).downcase} '#{value[:from]}' #{opt == 'BETWEEN' ? '- ' + value[:to].to_s : ''}"
           when :date, :time, :datetime, :timestamp
             conversion = column.column.type == :date ? :to_date : :to_time
-            from = controller.condition_value_for_datetime(value[:from], conversion)
-            to = controller.condition_value_for_datetime(value[:to], conversion)
+            from = controller.condition_value_for_datetime(column, value[:from], conversion)
+            to = controller.condition_value_for_datetime(column, value[:to], conversion)
             "#{column.active_record_class.human_attribute_name(column.name)} #{as_(value[:opt])} #{I18n.l(from)} #{value[:opt] == 'BETWEEN' ? '- ' + I18n.l(to) : ''}"
           when :select, :multi_select, :record_select
             associated = value
             associated = [associated].compact unless associated.is_a? Array
-            associated = column.association.klass.where(["id in (?)", associated.map(&:to_i)]).collect(&:to_label) if column.association
-            "#{column.active_record_class.human_attribute_name(column.name)} = #{associated.join(', ')}"
+            if column.association
+              associated = column.association.klass.where(:id => associated.map(&:to_i)).collect(&:to_label)
+            elsif column.options[:options]
+              associated = associated.collect do |value|
+                text, val = column.options[:options].find {|text, val| (val.nil? ? text : val).to_s == value.to_s}
+                value = active_scaffold_translated_option(column, text, val).first if text
+                value
+              end
+            end
+            as_(:association, :scope => :human_conditions, :column => column.active_record_class.human_attribute_name(column.name), :value => associated.join(', '))
           when :boolean, :checkbox
             label = column.column.type_cast(value) ? as_(:true) : as_(:false)
-            "#{column.active_record_class.human_attribute_name(column.name)} = #{label}"
+            as_(:boolean, :scope => :human_conditions, :column => column.active_record_class.human_attribute_name(column.name), :value => label)
           when :null
             "#{column.active_record_class.human_attribute_name(column.name)} #{as_(value.to_sym)}"
           end
         end unless value.nil?
       end
 
-      def override_human_condition_column?(column)
-        respond_to?(override_human_condition_column(column))
-      end
-
       # the naming convention for overriding form fields with helpers
       def override_human_condition_column(column)
-        "#{column.name}_human_condition_column"
+        override_helper column, 'human_condition_column'
       end
+      alias_method :override_human_condition_column?, :override_human_condition_column
 
       def override_human_condition?(search_ui)
         respond_to?(override_human_condition(search_ui))

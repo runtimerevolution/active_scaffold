@@ -33,6 +33,7 @@ module ActiveScaffold::Actions
 
     def create_respond_to_html
       if params[:iframe]=='true' # was this an iframe post ?
+        do_refresh_list if successful? && active_scaffold_config.create.refresh_list && !render_parent?
         responds_to_parent do
           render :action => 'on_create', :formats => [:js], :layout => false
         end
@@ -47,9 +48,8 @@ module ActiveScaffold::Actions
             return_to_main
           end
         else
-          if !nested? && active_scaffold_config.actions.include?(:list) && active_scaffold_config.list.always_show_create
-            do_list
-            render(:action => 'list')
+          if active_scaffold_config.actions.include?(:list) && active_scaffold_config.list.always_show_create
+            list
           else
             render(:action => 'create')
           end
@@ -58,10 +58,7 @@ module ActiveScaffold::Actions
     end
 
     def create_respond_to_js
-      if successful? && active_scaffold_config.create.refresh_list && !render_parent?
-        do_search if respond_to? :do_search
-        do_list
-      end
+      do_refresh_list if successful? && active_scaffold_config.create.refresh_list && !render_parent?
       render :action => 'on_create'
     end
 
@@ -82,38 +79,33 @@ module ActiveScaffold::Actions
     def do_new
       @record = new_model
       apply_constraints_to_record(@record)
-      if nested?
-        create_association_with_parent(@record)
-        register_constraints_with_action_columns(nested.constrained_fields)
-      end
+      create_association_with_parent(@record) if nested?
       @record
     end
 
     # A somewhat complex method to actually create a new record. The complexity is from support for subforms and associated records.
     # If you want to customize this behavior, consider using the +before_create_save+ and +after_create_save+ callbacks.
-    def do_create
+    def do_create(options = {})
+      attributes = options[:attributes] || params[:record]
       begin
         active_scaffold_config.model.transaction do
-          @record = update_record_from_params(new_model, active_scaffold_config.create.columns, params[:record])
+          @record = update_record_from_params(new_model, active_scaffold_config.create.columns, attributes)
           apply_constraints_to_record(@record, :allow_autosave => true)
-          if nested?
-            create_association_with_parent(@record) 
-            register_constraints_with_action_columns(nested.constrained_fields)
-          end
-          create_save
+          create_association_with_parent(@record) if nested?
+          before_create_save(@record)
+          self.successful = [@record.valid?, @record.associated_valid?].all? # this syntax avoids a short-circuit
+          create_save(@record) unless options[:skip_save]
         end
-      rescue ActiveRecord::RecordInvalid
-        flash[:error] = $!.message
+      rescue ActiveRecord::ActiveRecordError => ex
+        flash[:error] = ex.message
         self.successful = false
       end
     end
 
-    def create_save
-      before_create_save(@record)
-      self.successful = [@record.valid?, @record.associated_valid?].all? {|v| v == true} # this syntax avoids a short-circuit
+    def create_save(record)
       if successful?
-        @record.save! and @record.save_associated!
-        after_create_save(@record)
+        record.save! and record.save_associated!
+        after_create_save(record)
       end
     end
 
@@ -127,11 +119,11 @@ module ActiveScaffold::Actions
     # You may override the method to customize.
     
     def create_ignore?
-      nested? && active_scaffold_config.list.always_show_create
+      active_scaffold_config.list.always_show_create
     end
     
     def create_authorized?
-      (!nested? || !nested.readonly?) && authorized_for?(:crud_type => :create)
+      !(nested? && (nested.readonly? || nested.readonly_through_association?)) && authorized_for?(:crud_type => :create)
     end
     private
     def create_authorized_filter

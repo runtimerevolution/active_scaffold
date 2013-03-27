@@ -6,6 +6,7 @@ en:
     add: 'Add'
     add_existing: 'Add Existing'
     add_existing_model: 'Add Existing %{model}'
+    apply: 'Apply'
     are_you_sure_to_delete: 'Are you sure you want to delete %{label}?'
     cancel: 'Cancel'
     click_to_edit: 'Click to edit'
@@ -31,8 +32,10 @@ en:
     filtered: '(Filtered)'
     found: 'Found'
     hide: 'Hide'
+    inplace_edit_handle: '--'
     live_search: 'Live Search'
     loading: 'Loading…'
+    mark_all_records: "Mark all"
     next: 'Next'
     no_entries: 'No Entries'
     no_options: 'no options'
@@ -41,9 +44,13 @@ en:
     pdf: 'PDF'
     previous: 'Previous'
     print: 'Print'
+    records_marked:
+      one: "1 marked %{model}"
+      other: "%{count} marked %{model}"
     refresh: 'Refresh'
     remove: 'Remove'
     remove_file: 'Remove or Replace file'
+    replace_existing: 'Replace Existing'
     replace_with_new: 'Replace With New'
     revisions_for_model: 'Revisions for %{model}'
     reset: 'Reset'
@@ -91,7 +98,7 @@ en:
     months: 'Months'
     years: 'Years'
     optional_attributes: 'Further Options'
-    null: 'Null'
+    :null: 'Null'
     not_null: 'Not Null'
     date_picker_options:
       weekHeader: 'Wk'
@@ -100,6 +107,10 @@ en:
       showMonthAfterYear: false
       
     datetime_picker_options:
+    
+    human_conditions:
+      boolean: "%{column} = %{value}"
+      association: "%{column} = %{value}"
       
     errors:
       template:
@@ -109,8 +120,7 @@ en:
           
         body: "There were problems with the following fields:"
         
-      
-      # error_messages
+    # error_messages
     cant_destroy_record: "%{record} can't be destroyed"
     internal_error: 'Request Failed (code 500, Internal Error)'
     version_inconsistency: 'Version inconsistency - this record has been modified since you started editing it.'

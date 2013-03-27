@@ -2,7 +2,7 @@ module ActiveScaffold
   module Helpers
     module ControllerHelpers
       def self.included(controller)
-        controller.class_eval { helper_method :params_for, :main_path_to_return, :render_parent?, :render_parent_options, :render_parent_action, :nested_singular_association?, :build_associated}
+        controller.class_eval { helper_method :params_for, :conditions_from_params, :main_path_to_return, :render_parent?, :render_parent_options, :render_parent_action, :nested_singular_association?, :build_associated}
       end
       
       include ActiveScaffold::Helpers::IdHelpers
@@ -12,10 +12,10 @@ module ActiveScaffold
         # :sort, :sort_direction, and :page are arguments that stored in the session. they need not propagate.
         # and wow. no we don't want to propagate :record.
         # :commit is a special rails variable for form buttons
-        blacklist = [:adapter, :position, :sort, :sort_direction, :page, :record, :commit, :_method, :authenticity_token, :iframe]
+        blacklist = [:adapter, :position, :sort, :sort_direction, :page, :record, :commit, :_method, :authenticity_token, :iframe, :associated_id, :dont_close]
         unless @params_for
           @params_for = {}
-          params.select { |key, value| blacklist.exclude? key.to_sym if key }.each {|key, value| @params_for[key.to_sym] = value.duplicable? ? value.clone : value}
+          params.except(*blacklist).each {|key, value| @params_for[key.to_sym] = value.duplicable? ? value.clone : value}
           @params_for[:controller] = '/' + @params_for[:controller].to_s unless @params_for[:controller].to_s.first(1) == '/' # for namespaced controllers
           @params_for.delete(:id) if @params_for[:id].nil?
         end
@@ -27,23 +27,21 @@ module ActiveScaffold
         if params[:return_to]
           params[:return_to]
         else
+          exclude_parameters = [:utf8, :associated_id]
           parameters = {}
-          if params[:parent_controller]
-            parameters[:controller] = params[:parent_controller]
-            #parameters[:eid] = params[:parent_controller]
+          if params[:parent_scaffold] && nested? && nested.singular_association?
+            parameters[:controller] = params[:parent_scaffold]
+            exclude_parameters.concat [nested.param_name, :association, :parent_scaffold]
+            #parameters[:eid] = params[:parent_scaffold] # not neeeded anymore?
           end
           parameters.merge! nested.to_params if nested?
           if params[:parent_sti]
             parameters[:controller] = params[:parent_sti]
-            #parameters[:eid] = nil
+            #parameters[:eid] = nil # not neeeded anymore?
           end
-          parameters[:parent_column] = nil
-          parameters[:parent_id] = nil
           parameters[:action] = "index"
           parameters[:id] = nil
-          parameters[:associated_id] = nil
-          parameters[:utf8] = nil
-          params_for(parameters)
+          params_for(parameters).except(*exclude_parameters)
         end
       end
 
@@ -59,22 +57,20 @@ module ActiveScaffold
         if nested_singular_association?
           {:controller => nested.parent_scaffold.controller_path, :action => :row, :id => nested.parent_id}
         elsif params[:parent_sti]
-          options = {:controller => params[:parent_sti], :action => render_parent_action(params[:parent_sti])}
-          if render_parent_action(params[:parent_sti]) == :index
-            options.merge(params.slice(:eid))
-          else
-            options.merge({:id => @record.id})
-          end
+          options = params_for(:controller => params[:parent_sti], :action => render_parent_action, :parent_sti => nil)
+          options.merge(:id => @record.id) if render_parent_action == :row
         end
       end
 
-      def render_parent_action(controller_path = nil)
+      def render_parent_action
         begin
           @parent_action = :row
-          parent_controller = "#{controller_path.to_s.camelize}Controller".constantize
-          @parent_action = :index if action_name == 'create' && parent_controller.active_scaffold_config.actions.include?(:create) && parent_controller.active_scaffold_config.create.refresh_list == true
-          @parent_action = :index if action_name == 'update' && parent_controller.active_scaffold_config.actions.include?(:update) && parent_controller.active_scaffold_config.update.refresh_list == true
-          @parent_action = :index if action_name == 'destroy' && parent_controller.active_scaffold_config.actions.include?(:delete) && parent_controller.active_scaffold_config.delete.refresh_list == true
+          if params[:parent_sti]
+            parent_controller = "#{params[:parent_sti].to_s.camelize}Controller".constantize
+            @parent_action = :index if action_name == 'create' && parent_controller.active_scaffold_config.actions.include?(:create) && parent_controller.active_scaffold_config.create.refresh_list == true
+            @parent_action = :index if action_name == 'update' && parent_controller.active_scaffold_config.actions.include?(:update) && parent_controller.active_scaffold_config.update.refresh_list == true
+            @parent_action = :index if action_name == 'destroy' && parent_controller.active_scaffold_config.actions.include?(:delete) && parent_controller.active_scaffold_config.delete.refresh_list == true
+          end
         rescue ActiveScaffold::ControllerNotFound
         end if @parent_action.nil?
         @parent_action
@@ -82,7 +78,11 @@ module ActiveScaffold
       
       def build_associated(column, record)
         if column.singular_association?
-          record.send(:"build_#{column.name}")
+          if column.association.options[:through]
+            record.send(:"build_#{column.association.through_reflection.name}").send(:"build_#{column.name}")
+          else
+            record.send(:"build_#{column.name}")
+          end
         else
           record.send(column.name).build
         end

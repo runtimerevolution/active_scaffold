@@ -26,11 +26,11 @@ module ActiveScaffold::Actions
         text_search = active_scaffold_config.search.text_search
         query = query.split(active_scaffold_config.search.split_terms) if active_scaffold_config.search.split_terms
         search_conditions = self.class.create_conditions_for_columns(query, columns, text_search)
-        self.active_scaffold_conditions = merge_conditions(self.active_scaffold_conditions, search_conditions)
         @filtered = !search_conditions.blank?
+        self.active_scaffold_conditions.concat search_conditions if @filtered
 
-        includes_for_search_columns = columns.collect{ |column| column.includes}.flatten.uniq.compact
-        self.active_scaffold_includes.concat includes_for_search_columns
+        outer_joins = columns.collect{ |column| column.search_joins unless column.includes.present? && list_columns.include?(column)}
+        self.active_scaffold_outer_joins.concat outer_joins.flatten.uniq.compact
 
         active_scaffold_config.list.user.page = nil
       end

@@ -25,6 +25,10 @@ module ActiveScaffold::Config
     cattr_accessor :theme
     @@theme = :default
 
+    # enable caching of action link urls
+    cattr_accessor :cache_action_link_urls
+    @@cache_action_link_urls = true
+
     # lets you disable the DHTML history
     def self.dhtml_history=(val)
       @@dhtml_history = val
@@ -60,6 +64,14 @@ module ActiveScaffold::Config
     cattr_accessor :sti_create_links
     @@sti_create_links = true
 
+    # prefix messages with current timestamp, set the format to display (you can use I18n keys) or true and :short will be used
+    cattr_accessor :timestamped_messages
+    @@timestamped_messages = false
+
+    # a hash of string (or array of strings) and highlighter string to highlight words in messages. It will use highlight rails helper
+    cattr_accessor :highlight_messages
+    @@highlight_messages = nil
+
     # instance-level configuration
     # ----------------------------
 
@@ -83,6 +95,9 @@ module ActiveScaffold::Config
     # lets you override the global ActiveScaffold theme for a specific controller
     attr_accessor :theme
 
+    # enable caching of action link urls
+    attr_accessor :cache_action_link_urls
+
     # lets you specify whether add a create link for each sti child for a specific controller
     attr_accessor :sti_create_links
     def add_sti_create_links?
@@ -100,6 +115,12 @@ module ActiveScaffold::Config
 
     # STI children models, use an array of model names
     attr_accessor :sti_children
+
+    # prefix messages with current timestamp, set the format to display (you can use I18n keys) or true and :short will be used
+    attr_accessor :timestamped_messages
+
+    # a hash of string (or array of strings) and highlighter string to highlight words in messages. It will use highlight rails helper
+    attr_accessor :highlight_messages
 
     ##
     ## internal usage only below this point
@@ -125,21 +146,23 @@ module ActiveScaffold::Config
       # inherit the global frontend
       @frontend = self.class.frontend
       @theme = self.class.theme
+      @cache_action_link_urls = self.class.cache_action_link_urls
       @sti_create_links = self.class.sti_create_links
 
       # inherit from the global set of action links
       @action_links = self.class.action_links.clone
+      @timestamped_messages = self.class.timestamped_messages
+      @highlight_messages = self.class.highlight_messages
     end
 
     # To be called after your finished configuration
     def _load_action_columns
-      ActiveScaffold::DataStructures::ActionColumns.class_eval {include ActiveScaffold::DataStructures::ActionColumns::AfterConfiguration}
+      #ActiveScaffold::DataStructures::ActionColumns.class_eval {include ActiveScaffold::DataStructures::ActionColumns::AfterConfiguration}
 
       # then, register the column objects
       self.actions.each do |action_name|
         action = self.send(action_name)
-        next unless action.respond_to? :columns
-        action.columns.set_columns(self.columns)
+        action.columns.set_columns(self.columns) if action.respond_to?(:columns)
       end
     end
 
@@ -176,9 +199,9 @@ module ActiveScaffold::Config
     end
 
     def self.method_missing(name, *args)
-      klass = "ActiveScaffold::Config::#{name.to_s.titleize}".constantize rescue nil
+      klass = "ActiveScaffold::Config::#{name.to_s.camelcase}".constantize rescue nil
       if @@actions.include? name.to_s.underscore and klass
-        return eval("ActiveScaffold::Config::#{name.to_s.titleize}")
+        return eval("ActiveScaffold::Config::#{name.to_s.camelcase}")
       end
       super
     end

@@ -12,7 +12,7 @@ module ActiveScaffold::Bridges
         /%m/ => 'mm',
         /%y/ => 'y',
         /%Y/ => 'yy',
-        /%H/ => 'hh', # options ampm => false
+        /%H/ => 'HH', # options ampm => false
         /%I/ => 'hh', # options ampm => true
         /%M/ => 'mm',
         /%p/ => 'tt',
@@ -101,6 +101,7 @@ module ActiveScaffold::Bridges
           nil
         end
         js_format = rails_format.dup
+        js_format.gsub! /([ ]|^)([^% ]\S*)/, " '\\2'"
         DATE_FORMAT_CONVERSION.each do |key, value|
           js_format.gsub!(key, value)
         end
@@ -110,13 +111,13 @@ module ActiveScaffold::Bridges
       def self.split_datetime_format(datetime_format)
         date_format = datetime_format
         time_format = nil
-        time_start_indicators = %w{hh mm tt ss}
+        time_start_indicators = %w{HH hh mm tt ss}
         unless datetime_format.nil?
           start_indicator = time_start_indicators.detect {|indicator| datetime_format.include?(indicator)}
           unless start_indicator.nil?
             pos_time_format = datetime_format.index(start_indicator)
-            date_format = datetime_format.to(pos_time_format - 1)
-            time_format = datetime_format.from(pos_time_format)
+            date_format = datetime_format.to(pos_time_format - 1).strip
+            time_format = datetime_format.from(pos_time_format).strip
           end
         end
         return date_format, time_format
@@ -150,7 +151,7 @@ module ActiveScaffold::Bridges
       module SearchColumnHelpers
         def active_scaffold_search_date_bridge_calendar_control(column, options, current_search, name)
           if current_search.is_a? Hash
-            value = controller.class.condition_value_for_datetime(current_search[name], column.search_ui == :date_picker ? :to_date : :to_time)
+            value = controller.class.condition_value_for_datetime(column, current_search[name], column.search_ui == :date_picker ? :to_date : :to_time)
           else
             value = current_search
           end
@@ -158,7 +159,7 @@ module ActiveScaffold::Bridges
           options = active_scaffold_input_text_options(options.merge(column.options))
           options[:class] << " #{column.search_ui.to_s}"
           options[:style] = (options[:show].nil? || options[:show]) ? nil : "display: none"
-          format = options.delete(:format) || :default
+          format = options.delete(:format) || (column.search_ui == :date_picker ? :default : :picker)
           datepicker_format_options(column, format, options)
           text_field_tag("#{options[:name]}[#{name}]", value ? l(value, :format => format) : nil, options.merge(:id => "#{options[:id]}_#{name}", :name => "#{options[:name]}[#{name}]"))
         end
@@ -168,8 +169,8 @@ module ActiveScaffold::Bridges
         def active_scaffold_input_date_picker(column, options)
           options = active_scaffold_input_text_options(options.merge(column.options))
           options[:class] << " #{column.form_ui.to_s}"
-          value = controller.class.condition_value_for_datetime(@record.send(column.name), column.form_ui == :date_picker ? :to_date : :to_time)
-          format = options.delete(:format) || :default
+          value = controller.class.condition_value_for_datetime(column, @record.send(column.name), column.form_ui == :date_picker ? :to_date : :to_time)
+          format = options.delete(:format) || (column.form_ui == :date_picker ? :default : :picker)
           datepicker_format_options(column, format, options)
           options[:value] = (value ? l(value, :format => format) : nil)
           text_field(:record, column.name, options)

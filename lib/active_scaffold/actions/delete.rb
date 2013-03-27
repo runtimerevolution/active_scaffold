@@ -23,10 +23,7 @@ module ActiveScaffold::Actions
     end
 
     def destroy_respond_to_js
-      if successful? && active_scaffold_config.delete.refresh_list && !render_parent?
-        do_search if respond_to? :do_search
-        do_list
-      end
+      do_refresh_list if successful? && active_scaffold_config.delete.refresh_list && !render_parent?
       render(:action => 'destroy')
     end
 
@@ -52,17 +49,21 @@ module ActiveScaffold::Actions
       @record ||= destroy_find_record
       begin
         self.successful = @record.destroy
-        marked_records.delete @record.id.to_s if successful?
-      rescue
+      rescue Exception => ex
         flash[:warning] = as_(:cant_destroy_record, :record => @record.to_label)
         self.successful = false
+        logger.debug ex.message
+        logger.debug ex.backtrace.join("\n")
       end
     end
 
     # The default security delegates to ActiveRecordPermissions.
     # You may override the method to customize.
     def delete_authorized?(record = nil)
-      (!nested? || !nested.readonly?) && authorized_for?(:crud_type => :delete)
+      (!nested? || !nested.readonly?) && (record || self).send(:authorized_for?, :crud_type => :delete)
+    end
+    def delete_ignore?(record = nil)
+      (nested? && nested.readonly?) || !self.send(:authorized_for?, :crud_type => :delete)
     end
     private
     def delete_authorized_filter

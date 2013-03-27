@@ -6,13 +6,12 @@ module ActiveScaffold::Config
       super
       # start with the ActionLink defined globally
       @link = self.class.link.clone
-      @action_group = self.class.action_group.clone if self.class.action_group
     end
 
     # global level configuration
     # --------------------------
     cattr_accessor :link
-    @@link = ActiveScaffold::DataStructures::ActionLink.new('show', :label => :show, :type => :member, :security_method => :show_authorized?)
+    @@link = ActiveScaffold::DataStructures::ActionLink.new('show', :label => :show, :type => :member, :security_method => :show_authorized?, :ignore_method => :show_ignore?)
     # instance-level configuration
     # ----------------------------
 

@@ -5,6 +5,7 @@ module ActiveScaffold::Config
 
     def initialize(core_config)
       @core = core_config
+      @action_group = self.class.action_group.clone if self.class.action_group
     end
 
     def self.inherited(subclass)
@@ -41,13 +42,23 @@ module ActiveScaffold::Config
     attr_accessor :action_group
 
     class UserSettings
-      def initialize(conf, storage, params)
+      def initialize(conf, storage, params, action = :base)
         # the session hash relevant to this action
         @session = storage
         # all the request params
         @params = params
         # the configuration object for this action
         @conf = conf
+        @action = action
+      end
+
+      def [](key)
+        @session[@action][key] if @action && @session[@action]
+      end
+
+      def []=(key, value)
+        @session[@action] ||= {}
+        @session[@action][key] = value
       end
     end
     
@@ -62,9 +73,12 @@ module ActiveScaffold::Config
     private
     
     def columns=(val)
-      @columns = ActiveScaffold::DataStructures::ActionColumns.new(*val)
-      @columns.action = self
-      @columns.set_columns(@core.columns) if @columns.respond_to?(:set_columns)
+      @columns.set_values(*val) if @columns
+      @columns ||= ActiveScaffold::DataStructures::ActionColumns.new(*val).tap do |columns|
+        columns.action = self
+        columns.set_columns(@core.columns) if @columns.respond_to?(:set_columns)
+        columns
+      end
       @columns
     end
   end

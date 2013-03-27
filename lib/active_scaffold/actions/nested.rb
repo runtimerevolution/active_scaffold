@@ -26,21 +26,18 @@ module ActiveScaffold::Actions
     def set_nested
       if params[:parent_scaffold] && (params[:association] || params[:named_scope])
         @nested = ActiveScaffold::DataStructures::NestedInfo.get(active_scaffold_config.model, params)
-        unless @nested.nil?
-          active_scaffold_constraints[:id] = params[:id] if @nested.belongs_to?
-          register_constraints_with_action_columns(@nested.constrained_fields,  active_scaffold_config.list.hide_nested_column ? [] : [:list])
-        end
+        register_constraints_with_action_columns(@nested.constrained_fields) unless @nested.nil?
       end
     end
     
     def configure_nested
       if nested?
-        active_scaffold_session_storage[:list][:label] =  if nested.belongs_to?
+        active_scaffold_config.list.user.label = if nested.belongs_to?
           as_(:nested_of_model, :nested_model => active_scaffold_config.model.model_name.human, :parent_model => nested_parent_record.to_label)
         else
           as_(:nested_for_model, :nested_model => active_scaffold_config.list.label, :parent_model => nested_parent_record.to_label)
         end
-        if nested.sorted?
+        if nested.sorted? && !active_scaffold_config.nested.ignore_order_from_association
           active_scaffold_config.list.user.nested_default_sorting = {:table_name => active_scaffold_config.model.model_name, :default_sorting => nested.default_sorting}
         end
       end
@@ -76,14 +73,18 @@ module ActiveScaffold::Actions
     end
     
     def beginning_of_chain
-      if nested? && nested.association && !nested.association.belongs_to?
+      if nested? && nested.association
         if nested.association.collection?
-          nested.parent_scope.send(nested.association.name)
+          nested_parent_record.send(nested.association.name)
+        elsif nested.association.options[:through] || nested.child_association.nil? # has_one :through doesn't need conditions, and without child_association is not possible to add them
+          active_scaffold_config.model
         elsif nested.child_association.belongs_to?
-          active_scaffold_config.model.where(nested.child_association.foreign_key => nested.parent_scope)
+          active_scaffold_config.model.where(nested.child_association.foreign_key => nested_parent_record)
+        elsif nested.association.belongs_to?
+          active_scaffold_config.model.joins(nested.child_association.name).where(nested.association.active_record.table_name => {nested.association.active_record.primary_key => nested_parent_record}).readonly(false)
         end
       elsif nested? && nested.scope
-        nested.parent_scope.send(nested.scope)
+        nested_parent_record.send(nested.scope)
       else
         active_scaffold_config.model
       end

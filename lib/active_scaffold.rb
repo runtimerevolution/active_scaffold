@@ -70,6 +70,7 @@ module ActiveScaffold
 
     base.helper_method :touch_device?
     base.helper_method :hover_via_click?
+    base.helper_method :active_scaffold_constraints
   end
 
   def self.set_defaults(&block)
@@ -84,11 +85,20 @@ module ActiveScaffold
     self.class.active_scaffold_config_for(klass)
   end
 
-  def active_scaffold_session_storage(id = nil)
+  def active_scaffold_session_storage_key(id = nil)
     id ||= params[:eid] || "#{params[:controller]}#{"_#{nested.parent_id}" if nested?}"
-    session_index = "as:#{id}"
+    "as:#{id}"
+  end
+
+  def active_scaffold_session_storage(id = nil)
+    session_index = active_scaffold_session_storage_key(id)
     session[session_index] ||= {}
     session[session_index]
+  end
+
+  def clear_storage
+    session_index = active_scaffold_session_storage_key
+    session.delete(session_index) unless session[session_index].present?
   end
 
   # at some point we need to pass the session and params into config. we'll just take care of that before any particular action occurs by passing those hashes off to the UserSettings class of each action.
@@ -97,8 +107,7 @@ module ActiveScaffold
       active_scaffold_config.actions.each do |action_name|
         conf_instance = active_scaffold_config.send(action_name) rescue next
         next if conf_instance.class::UserSettings == ActiveScaffold::Config::Base::UserSettings # if it hasn't been extended, skip it
-        active_scaffold_session_storage[action_name] ||= {}
-        conf_instance.user = conf_instance.class::UserSettings.new(conf_instance, active_scaffold_session_storage[action_name], params)
+        conf_instance.user = conf_instance.class::UserSettings.new(conf_instance, active_scaffold_session_storage, params)
       end
     end
   end
@@ -138,7 +147,7 @@ module ActiveScaffold
   end
 
   def self.js_config
-    @@js_config ||= {:scroll_on_close => true}
+    @@js_config ||= {:scroll_on_close => :checkInViewport}
   end
 
   # exclude bridges you do not need
@@ -161,6 +170,7 @@ module ActiveScaffold
 
   module ClassMethods
     def active_scaffold(model_id = nil, &block)
+      extend Prefixes
       # initialize bridges here
       ActiveScaffold::Bridges.run_all
 
@@ -171,16 +181,7 @@ module ActiveScaffold
       @active_scaffold_config = ActiveScaffold::Config::Core.new(model_id)
       @active_scaffold_config_block = block
       self.links_for_associations
-
-      @active_scaffold_frontends = []
-      if active_scaffold_config.frontend.to_sym != :default
-        active_scaffold_custom_frontend_path = File.join(ActiveScaffold::Config::Core.plugin_directory, 'frontends', active_scaffold_config.frontend.to_s , 'views')
-        @active_scaffold_frontends << active_scaffold_custom_frontend_path
-      end
-      active_scaffold_default_frontend_path = File.join(ActiveScaffold::Config::Core.plugin_directory, 'frontends', 'default' , 'views')
-      @active_scaffold_frontends << active_scaffold_default_frontend_path
-      @active_scaffold_custom_paths = []
-
+      
       self.active_scaffold_superclasses_blocks.each {|superblock| self.active_scaffold_config.configure &superblock}
       self.active_scaffold_config.sti_children = nil # reset sti_children if set in parent block
       self.active_scaffold_config.configure &block if block_given?
@@ -210,12 +211,13 @@ module ActiveScaffold
           end
         end
       end
-      self.append_view_path active_scaffold_paths
       self._add_sti_create_links if self.active_scaffold_config.add_sti_create_links?
     end
 
-    def parent_prefixes
-      @parent_prefixes ||= super << 'active_scaffold_overrides' << ''
+    module Prefixes
+      def parent_prefixes
+        @parent_prefixes ||= super << 'active_scaffold_overrides'
+      end
     end
 
     # To be called after include action modules
@@ -263,13 +265,13 @@ module ActiveScaffold
       controller = active_scaffold_controller_for_column(column, options)
       
       unless controller.nil?
-        options.reverse_merge! :label => column.label, :position => :after, :type => :member, :controller => (controller == :polymorph ? controller : controller.controller_path), :column => column
+        options.reverse_merge! :position => :after, :type => :member, :controller => (controller == :polymorph ? controller : controller.controller_path), :column => column
         options[:parameters] ||= {}
-        options[:parameters].reverse_merge! :parent_scaffold => controller_path, :association => column.association.name
+        options[:parameters].reverse_merge! :association => column.association.name
         if column.plural_association?
           # note: we can't create nested scaffolds on :through associations because there's no reverse association.
           
-          ActiveScaffold::DataStructures::ActionLink.new('index', options) #unless column.through_association?
+          ActiveScaffold::DataStructures::ActionLink.new('index', options.merge(:refresh_on_close => true)) #unless column.through_association?
         else
           actions = controller.active_scaffold_config.actions unless controller == :polymorph
           actions ||= [:create, :update, :show] 
@@ -284,22 +286,18 @@ module ActiveScaffold
     def link_for_association_as_scope(scope, options = {})
       options.reverse_merge! :label => scope, :position => :after, :type => :member, :controller => controller_path
       options[:parameters] ||= {}
-      options[:parameters].reverse_merge! :parent_scaffold => controller_path, :named_scope => scope
+      options[:parameters].reverse_merge! :named_scope => scope
       ActiveScaffold::DataStructures::ActionLink.new('index', options)
     end
 
     def add_active_scaffold_path(path)
-      @active_scaffold_paths = nil # Force active_scaffold_paths to rebuild
-      @active_scaffold_custom_paths << path
-    end
-
-    def active_scaffold_paths
-      return @active_scaffold_paths unless @active_scaffold_paths.nil?
-
-      @active_scaffold_paths = []
-      @active_scaffold_paths.concat @active_scaffold_custom_paths unless @active_scaffold_custom_paths.nil?
-      @active_scaffold_paths.concat @active_scaffold_frontends unless @active_scaffold_frontends.nil?
-      @active_scaffold_paths
+      as_path = File.join(ActiveScaffold::Config::Core.plugin_directory, 'app', 'views')
+      index = view_paths.find_index { |p| p.to_s == as_path }
+      if index
+        self.view_paths = view_paths[0..index-1] + Array(path) + view_paths[index..-1]
+      else
+        append_view_path path
+      end
     end
 
     def active_scaffold_config

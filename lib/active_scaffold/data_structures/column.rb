@@ -13,12 +13,17 @@ module ActiveScaffold::DataStructures
       self.clear_link if value
       @inplace_edit = value
     end
+    
+    attr_accessor :inplace_edit_update
 
     # Whether this column set is collapsed by default in contexts where collapsing is supported
     attr_accessor :collapsed
 
     # Whether to enable add_existing for this column
     attr_accessor :allow_add_existing
+    
+    # What columns load from main table
+    attr_accessor :select_columns
     
     # Any extra parameters this particular column uses.  This is for create/update purposes.
     def params
@@ -43,6 +48,12 @@ module ActiveScaffold::DataStructures
       end
     end
 
+    # A placeholder text, to be used inside blank text fields to describe, what should be typed in
+    attr_writer :placeholder
+    def placeholder
+      @placeholder || I18n.t(name, :scope => [:activerecord, :placeholder, active_record_class.to_s.underscore.to_sym], :default => '')
+    end
+
     # this will be /joined/ to the :name for the td's class attribute. useful if you want to style columns on different ActiveScaffolds the same way, but the columns have different names.
     attr_accessor :css_class
 
@@ -61,13 +72,6 @@ module ActiveScaffold::DataStructures
     def update_columns=(column_names)
       @update_columns = Array(column_names)
     end
-
-    # send all the form instead of only new value when this column change
-    cattr_accessor :send_form_on_update_column
-    attr_accessor :send_form_on_update_column
-
-    # column to be updated in a form when this column changes
-    attr_accessor :update_column
 
     # send all the form instead of only new value when this column change
     cattr_accessor :send_form_on_update_column
@@ -165,18 +169,33 @@ module ActiveScaffold::DataStructures
     attr_reader :includes
     def includes=(value)
       @includes = case value
-        when Array, Hash then value 
+        when Array then value 
+        else [value] # automatically convert to an array
+      end
+    end
+
+    # a collection of associations to do left join when this column is included on search
+    def search_joins
+      @search_joins || @includes
+    end
+
+    def search_joins=(value)
+      @search_joins = case value
+        when Array then value 
         else [value] # automatically convert to an array
       end
     end
 
     # a collection of columns to load when eager loading is disabled, if it's nil all columns will be loaded
-    attr_accessor :select_columns
+    attr_accessor :select_associated_columns
 
     # describes how to search on a column
     #   search = true           default, uses intelligent search sql
     #   search = "CONCAT(a, b)" define your own sql for searching. this should be the "left-side" of a WHERE condition. the operator and value will be supplied by ActiveScaffold.
-    attr_writer :search_sql
+    #   search = [:a, :b]       searches in both fields
+    def search_sql=(value)
+      @search_sql = (value == true || value.is_a?(Proc)) ? value : Array(value)
+    end
     def search_sql
       self.initialize_search_sql if @search_sql === true
       @search_sql
@@ -278,6 +297,7 @@ module ActiveScaffold::DataStructures
     # instantiation is handled internally through the DataStructures::Columns object
     def initialize(name, active_record_class) #:nodoc:
       self.name = name.to_sym
+      @tableless = active_record_class < ActiveScaffold::Tableless
       @column = active_record_class.columns_hash[self.name.to_s]
       @association = active_record_class.reflect_on_association(self.name)
       @autolink = !@association.nil?
@@ -288,19 +308,38 @@ module ActiveScaffold::DataStructures
       @show_blank_record = self.class.show_blank_record
       @send_form_on_update_column = self.class.send_form_on_update_column
       @actions_for_association_links = self.class.actions_for_association_links.clone if @association
+      @select_columns = if @association.nil? && @column
+        [field]
+      elsif polymorphic_association?
+        [field, quoted_field(@active_record_class.connection.quote_column_name(@association.foreign_type))]
+      elsif @association
+        if self.association.macro == :belongs_to
+          [field]
+        else
+          columns = []
+          if active_record_class.columns_hash[count_column = "#{@association.name}_count"]
+            columns << quoted_field(@active_record_class.connection.quote_column_name(count_column))
+          end
+          if @association.through_reflection.try(:macro) == :belongs_to
+            columns << quoted_field(@active_record_class.connection.quote_column_name(@association.through_reflection.foreign_key))
+          end
+          columns
+        end
+      end
       
       self.number = @column.try(:number?)
       @options = {:format => :i18n_number} if self.number?
       @form_ui = :checkbox if @column and @column.type == :boolean
       @form_ui = :textarea if @column and @column.type == :text
+      @form_ui = :number   if @column and self.number?
       @allow_add_existing = true
       @form_ui = self.class.association_form_ui if @association && self.class.association_form_ui
       
       # default all the configurable variables
       self.css_class = ''
       self.required = active_record_class.validators_on(self.name).any? do |val|
-        ActiveModel::Validations::PresenceValidator === val or (
-          ActiveModel::Validations::InclusionValidator === val and not val.options[:allow_nil] and not val.options[:allow_blank]
+        !val.options[:if] && !val.options[:unless] && (ActiveModel::Validations::PresenceValidator === val ||
+          (ActiveModel::Validations::InclusionValidator === val && !val.options[:allow_nil] && !val.options[:allow_blank])
         )
       end
       self.sort = true
@@ -308,13 +347,16 @@ module ActiveScaffold::DataStructures
       
       @weight = estimate_weight
 
-      self.includes = (association and not polymorphic_association?) ? [association.name] : []
+      if association && !polymorphic_association?
+        self.includes = [association.name]
+        self.search_joins = self.includes.clone
+      end
     end
 
     # just the field (not table.field)
     def field_name
       return nil if virtual?
-      column ? @active_record_class.connection.quote_column_name(column.name) : association.foreign_key
+      @field_name ||= column ? @active_record_class.connection.quote_column_name(column.name) : association.foreign_key
     end
 
     def <=>(other_column)
@@ -342,19 +384,32 @@ module ActiveScaffold::DataStructures
       end
     end
 
+    # to cache method to get value in list
+    attr_accessor :list_method
+
+    # cache constraints for numeric columns (get in ActiveScaffold::Helpers::FormColumnHelpers::numerical_constraints_for_column)
+    attr_accessor :numerical_constraints
+
+    # the table.field name for this column, if applicable
+    def field
+      @field ||= quoted_field(field_name)
+    end
+
     protected
+
+    def quoted_field(name)
+      [@active_record_class.quoted_table_name, name].join('.')
+    end
 
     def initialize_sort
       if self.virtual?
         # we don't automatically enable method sorting for virtual columns because it's slow, and we expect fewer complaints this way.
         self.sort = false
       else
-        if self.singular_association?
-          self.sort = {:method => "#{self.name}.to_s"}
-        elsif self.plural_association?
-          self.sort = {:method => "#{self.name}.join(',')"}
-        else
+        if column && !@tableless
           self.sort = {:sql => self.field}
+        else
+          self.sort = false
         end
       end
     end
@@ -362,22 +417,15 @@ module ActiveScaffold::DataStructures
     def initialize_search_sql
       self.search_sql = unless self.virtual?
         if association.nil?
-          self.field.to_s
+          self.field.to_s unless @tableless
         elsif !self.polymorphic_association?
-          [association.klass.table_name, association.klass.primary_key].collect! do |str|
-            association.klass.connection.quote_column_name str
-          end.join('.')
+          [association.klass.quoted_table_name, association.klass.quoted_primary_key].join('.') unless association.klass < ActiveScaffold::Tableless
         end
       end
     end
 
     # the table name from the ActiveRecord class
     attr_reader :table
-
-    # the table.field name for this column, if applicable
-    def field
-      @field ||= [@active_record_class.connection.quote_table_name(@table), field_name].join('.')
-    end
     
     def estimate_weight
       if singular_association?

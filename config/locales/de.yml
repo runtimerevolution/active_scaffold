@@ -6,6 +6,7 @@ de:
     add: 'Hinzufügen'
     add_existing: 'Existierenden Eintrag hinzufügen'
     add_existing_model: 'Existierende %{model} hinzufügen'
+    apply: 'Apply'
     are_you_sure_to_delete: 'Sind Sie sicher?'
     cancel: 'Abbrechen'
     click_to_edit: 'Zum Editieren anklicken'
@@ -27,11 +28,14 @@ de:
     export: 'Exportieren'
     nested_for_model: '%{nested_model} für %{parent_model}'
     nested_of_model: '%{nested_model} von %{parent_model}'
+    'false': 'False'
     filtered: '(Gefiltert)'
     found: 'Gefunden'
     hide: 'Verstecken'
+    inplace_edit_handle: '--'
     live_search: 'Live-Suche'
     loading: 'Lade…'
+    mark_all_records: "Mark all"
     next: 'Vor'
     no_entries: 'Keine Einträge'
     no_options: 'Keine Optionen'
@@ -40,9 +44,13 @@ de:
     pdf: 'PDF'
     previous: 'Zurück'
     print: 'Drucken'
+    records_marked:
+      one: "1 marked %{model}"
+      other: "%{count} marked %{model}"
     refresh: 'Neu laden'
     remove: 'Entfernen'
     remove_file: 'Entferne oder Ersetze Datei'
+    replace_existing: 'Existierenden ersetzen'
     replace_with_new: 'Mit Neuer ersetzen'
     revisions_for_model: 'Revisionen für %{model}'
     reset: 'Zurücksetzen'
@@ -53,6 +61,7 @@ de:
     show: 'Anzeigen'
     show_model: 'Zeige %{model} an'
     _to_ : ' zu '
+    'true': 'True'
     update: 'Speichern'
     update_model: 'Editiere %{model}'
     updated_model: '%{model} aktualisiert'
@@ -89,7 +98,7 @@ de:
     months: 'Monate'
     years: 'Jahre'
     optional_attributes: 'Weitere'
-    null: 'Null'
+    :null: 'Null'
     not_null: 'Nicht Null'
     date_picker_options:
       weekHeader: 'Wo'
@@ -100,6 +109,9 @@ de:
       timeText: 'Uhrzeit'
       currentText: 'Jetzt'
       closeText: 'Schließen'
+    human_conditions:
+      boolean: "%{column} = %{value}"
+      association: "%{column} = %{value}"
     errors:
       template:
         header:

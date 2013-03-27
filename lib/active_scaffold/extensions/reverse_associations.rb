@@ -7,19 +7,23 @@ module ActiveRecord
       end
 
       attr_writer :reverse
-      def reverse
-        @reverse ||= inverse_of.try(:name)
+      def reverse(klass = nil)
+        unless defined? @reverse
+          @reverse ||= inverse_of.try(:name)
+        end
+        @reverse || (autodetect_inverse(klass).try(:name) unless klass.nil?)
       end
 
       def inverse_of_with_autodetect
         inverse_of_without_autodetect || autodetect_inverse
       end
       alias_method_chain :inverse_of, :autodetect
-      
+
       protected
 
-        def autodetect_inverse
-          return nil if options[:polymorphic]
+        def autodetect_inverse(klass = nil)
+          return nil if klass.nil? && options[:polymorphic]
+          klass ||= self.klass
           reverse_matches = []
 
           # stage 1 filter: collect associations that point back to this model and use the same foreign_key
@@ -37,10 +41,10 @@ module ActiveRecord
               next if defined?(Refinery::Page::Translation) and ( klass == Refinery::Page::Translation )
               next if defined?(Refinery::PagePart::Translation) and ( klass == Refinery::PagePart::Translation )
               #puts "2) DEBUG - #{assoc.klass}"
-              
+
               # skip over has_many :through associations
               next if assoc.options[:through]
-              next unless assoc.options[:polymorphic] or assoc.klass == self.active_record
+              next unless assoc.options[:polymorphic] or assoc.class_name == self.active_record.name
 
               case [assoc.macro, self.macro].find_all{|m| m == :has_and_belongs_to_many}.length
                 # if both are a habtm, then match them based on the join table

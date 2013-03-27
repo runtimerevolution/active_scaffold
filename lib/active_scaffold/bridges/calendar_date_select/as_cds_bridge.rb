@@ -34,7 +34,7 @@ module ActiveScaffold
       module SearchColumnHelpers
         def active_scaffold_search_date_bridge_calendar_control(column, options, current_search, name)
           if current_search.is_a? Hash
-            value = controller.class.condition_value_for_datetime(current_search[name], column.column.type == :date ? :to_date : :to_time)
+            value = controller.class.condition_value_for_datetime(column, current_search[name], column.column.type == :date ? :to_date : :to_time)
           else
             value = current_search
           end
@@ -58,7 +58,6 @@ ActionView::Base.class_eval do
   include ActiveScaffold::Bridges::Shared::DateBridge::HumanConditionHelpers
   alias_method :active_scaffold_human_condition_calendar_date_select, :active_scaffold_human_condition_date_bridge
   include ActiveScaffold::Bridges::CalendarDateSelect::SearchColumnHelpers
-  include ActiveScaffold::Bridges::CalendarDateSelect::ViewHelpers
 end
 
 ActiveScaffold::Finder::ClassMethods.module_eval do

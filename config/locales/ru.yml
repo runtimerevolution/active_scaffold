@@ -6,6 +6,7 @@ ru:
     add: 'Добавить запись'
     add_existing: 'Добавить существующую запись'
     add_existing_model: '%{model}: добавить существующую запись'
+    apply: 'Apply'
     are_you_sure_to_delete: 'Удалить %{label}?'
     cancel: 'Отмена'
     click_to_edit: 'Нажмите для редактирования'
@@ -27,7 +28,7 @@ ru:
     export: 'Экспорт'
     nested_for_model: '%{parent_model} / %{nested_model}'
     nested_of_model: '%{nested_model} @ %{parent_model}'
-    false: 'Нет'
+    'false': 'Нет'
     filtered: '(Найденное)'
     found: 
       one: 'запись'
@@ -35,8 +36,10 @@ ru:
       many: 'записей'
       other: 'записи'
     hide: 'Скрыть'
+    inplace_edit_handle: '--'
     live_search: 'Поиск'
     loading: 'Загрузка…'
+    mark_all_records: "Отметить все"
     next: 'Следующее'
     no_entries: 'Нет записей'
     no_options: 'Нет вариантов'
@@ -45,9 +48,15 @@ ru:
     pdf: 'PDF'
     previous: 'Предыдущее'
     print: 'Печать'
+    records_marked:
+      one: "Отмечена 1 запись"
+      few: "Отмечено %{count} записи"
+      many: "Отмечено %{count} записей"
+      other: "Отмечено %{count} записи"
     refresh: 'Обновить'
     remove: 'Удалить'
     remove_file: 'Удалить или заменить файл'
+    replace_existing: 'Replace existing'
     replace_with_new: 'Заменить новым'
     revisions_for_model: '%{model}: редакции'
     reset: 'Сброс'
@@ -58,7 +67,7 @@ ru:
     show: 'Показать'
     show_model: '%{model}: показать запись'
     _to_ : ' to '
-    true: 'Да'
+    'true': 'Да'
     update: 'Обновить запись'
     update_model: '%{model}: обновить запись'
     updated_model: '%{model}: запись обновлена'
@@ -95,7 +104,7 @@ ru:
     months: 'месяцев'
     years: 'лет'
     optional_attributes: 'Дополнительные настройки'
-    null: 'Пусто'
+    :null: 'Пусто'
     not_null: 'Не пусто'
     date_picker_options:
       weekHeader: 'Нед.'
@@ -104,6 +113,10 @@ ru:
       showMonthAfterYear: false
       
     datetime_picker_options:
+    
+    human_conditions:
+      boolean: "%{column} = %{value}"
+      association: "%{column} = %{value}"
       
     errors:
       template:
