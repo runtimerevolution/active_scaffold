@@ -116,7 +116,7 @@ module ActiveScaffold
         else
           parts = Date._parse(value)
           time_parts = [[:hour, '%H'], [:min, '%M'], [:sec, '%S']].collect {|part, format_part| format_part if parts[part].present?}.compact
-          format = "#{I18n.t('date.formats.default')} #{time_parts.join(':')} #{'%z' if parts[:offset].present?}"
+          format = "#{I18n.t('date.formats.default')}, #{time_parts.join(':')} #{'%z' if parts[:offset].present?}"
           time = DateTime.strptime(value, format)
           time = Time.zone.local_to_utc(time) unless parts[:offset]
           time.in_time_zone.send(conversion) rescue nil
