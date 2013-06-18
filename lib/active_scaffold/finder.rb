@@ -151,7 +151,7 @@ module ActiveScaffold
           format = I18n.translate "time.formats.#{column.options[:format] || :picker}", :default => '' if ActiveScaffold.js_framework == :jquery
           if format.blank?
             time_parts = [[:hour, '%H'], [:min, '%M'], [:sec, '%S']].collect {|part, format_part| format_part if parts[part].present?}.compact
-            format = "#{I18n.t('date.formats.default')} #{time_parts.join(':')} #{'%z' if parts[:offset].present?}"
+            format = "#{I18n.t('date.formats.default')}, #{time_parts.join(':')} #{'%z' if parts[:offset].present?}"
           else
             if parts[:hour]
               [[:min, '%M'], [:sec, '%S']].each {|part, f| format.gsub!(":#{f}", '') unless parts[part].present?}
