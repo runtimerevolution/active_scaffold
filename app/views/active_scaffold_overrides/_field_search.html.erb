@@ -22,6 +22,23 @@ form_tag url_options, options %>
       <%= link_to_visibility_toggle(sub_section_id(:sub_section => 'further_options'), {:default_visible => false}) %>
       </li>
   <% end -%>
+  <li class="form-element">
+    <dl>
+      <dt>
+        <label for="search_for_playlist">Campo Genérico</label>
+      </dt>
+      <dt>
+        <%= text_field_tag(
+          :full_text_search,
+          "",
+          :class => 'text-input',
+          :id => search_input_id,
+          :size => 50,
+          :autocomplete => :off
+          )%>
+      </dt>
+    </dl>
+    </li>
   </ol>
   <p class="form-footer">
     <%= submit_tag as_(:search), :class => "submit" %>
