@@ -59,6 +59,17 @@ module ActiveScaffold::Actions
         unless filtered_columns.blank?
           @filtered = active_scaffold_config.field_search.human_conditions ? filtered_columns : true
         end
+        query = params[:full_text_search].to_s.strip rescue '' 
+        unless query.empty?
+          columns = active_scaffold_config.search.columns
+          text_search = active_scaffold_config.search.text_search
+          query = query.split(active_scaffold_config.search.split_terms) if active_scaffold_config.search.split_terms
+          search_conditions = self.class.create_conditions_for_columns(query, columns, text_search)
+          filtered = !search_conditions.blank?
+          self.active_scaffold_conditions.concat search_conditions if filtered
+          outer_joins = columns.collect{ |column| column.search_joins unless column.includes.present? && list_columns.include?(column)}
+          self.active_scaffold_outer_joins.concat outer_joins.flatten.uniq.compact
+        end
 
         active_scaffold_config.list.user.page = nil
       end
