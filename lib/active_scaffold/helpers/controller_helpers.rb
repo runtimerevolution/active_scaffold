@@ -2,11 +2,21 @@ module ActiveScaffold
   module Helpers
     module ControllerHelpers
       def self.included(controller)
-        controller.class_eval { helper_method :params_for, :conditions_from_params, :main_path_to_return, :render_parent?, :render_parent_options, :render_parent_action, :nested_singular_association?, :build_associated}
+        controller.class_eval { helper_method :params_for, :conditions_from_params, :main_path_to_return, :render_parent?, :render_parent_options, :render_parent_action, :nested_singular_association?, :build_associated, :generate_temporary_id, :generated_id}
       end
       
       include ActiveScaffold::Helpers::IdHelpers
       
+      def generate_temporary_id(record = nil, generated_id = nil)
+        (generated_id || (Time.now.to_f*1000).to_i.to_s).tap do |id|
+          (@temporary_ids ||= {})[record.class.name] = id if record
+        end
+      end
+
+      def generated_id(record)
+        @temporary_ids[record.class.name] if record && @temporary_ids
+      end
+
       def params_for(options = {})
         # :adapter and :position are one-use rendering arguments. they should not propagate.
         # :sort, :sort_direction, and :page are arguments that stored in the session. they need not propagate.
@@ -55,10 +65,10 @@ module ActiveScaffold
 
       def render_parent_options
         if nested_singular_association?
-          {:controller => nested.parent_scaffold.controller_path, :action => :row, :id => nested.parent_id}
+          {:controller => nested.parent_scaffold.controller_path, :action => :index, :id => nested.parent_id}
         elsif params[:parent_sti]
           options = params_for(:controller => params[:parent_sti], :action => render_parent_action, :parent_sti => nil)
-          options.merge(:id => @record.id) if render_parent_action == :row
+          options.merge(:action => :index, :id => @record.to_param) if render_parent_action == :row
         end
       end
 

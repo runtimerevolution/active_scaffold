@@ -5,6 +5,18 @@ module ActiveScaffold
         link_to page_number, url_options.merge(:page => page_number), options.merge(:class => "as_paginate")
       end
 
+      def pagination_url_options(url_options = nil)
+        url_options ||= params_for(:action => :index)
+        unless active_scaffold_config.store_user_settings
+          url_options.merge!(:search => search_params) if search_params.present?
+          if active_scaffold_config.list.user.user_sorting?
+            column, direction = active_scaffold_config.list.user.sorting.first
+            url_options.merge!(:sort => column.name, :sort_direction => direction)
+          end
+        end
+        url_options
+      end
+
       def pagination_ajax_links(current_page, url_options, options, inner_window, outer_window)
         start_number = current_page.number - inner_window
         end_number = current_page.number + inner_window
@@ -30,7 +42,7 @@ module ActiveScaffold
             page = current_page.number - offset
             if page < start_number && page > last_page
               html << '..' if page > last_page + 1
-              html << pagination_ajax_link(page, params)
+              html << pagination_ajax_link(page, url_options, options)
               last_page = page
             end
           end

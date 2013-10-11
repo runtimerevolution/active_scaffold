@@ -16,7 +16,7 @@ module ActiveScaffold::Actions
 
     protected
     def response_location
-      url_for(params_for(:action => "show", :id => @record.id)) if successful?
+      url_for(params_for(:action => "show", :id => @record.to_param)) if successful?
     end
 
     def new_respond_to_html
@@ -41,7 +41,7 @@ module ActiveScaffold::Actions
         if successful?
           flash[:info] = as_(:created_model, :model => @record.to_label)
           if action = active_scaffold_config.create.action_after_create
-            redirect_to params_for(:action => action, :id => @record.id)
+            redirect_to params_for(:action => action, :id => @record.to_param)
           elsif active_scaffold_config.create.persistent
             redirect_to params_for(:action => "new")
           else
@@ -99,6 +99,7 @@ module ActiveScaffold::Actions
       rescue ActiveRecord::ActiveRecordError => ex
         flash[:error] = ex.message
         self.successful = false
+        @record ||= new_model # ensure @record exists or display form will fail
       end
     end
 

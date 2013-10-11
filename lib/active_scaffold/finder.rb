@@ -76,7 +76,7 @@ module ActiveScaffold
           conditions += values*column.search_sql.size if values.present?
           conditions
         rescue Exception => e
-          logger.error Time.now.to_s + "#{e.inspect} -- on the ActiveScaffold column :#{column.name}, search_ui = #{search_ui} in #{self.name}"
+          logger.error "#{e.class.name}: #{e.message} -- on the ActiveScaffold column :#{column.name}, search_ui = #{search_ui} in #{self.name}"
           raise e
         end
       end
@@ -175,23 +175,11 @@ module ActiveScaffold
 
       def condition_value_for_numeric(column, value)
         return value if value.nil?
-        value = i18n_number_to_native_format(value) if [:i18n_number, :currency].include?(column.options[:format]) && column.search_ui != :number
+        value = column.number_to_native(value) if column.options[:format] && column.search_ui != :number
         case (column.search_ui || column.column.type)
         when :integer   then value.to_i rescue value ? 1 : 0
         when :float     then value.to_f
         when :decimal   then ActiveRecord::ConnectionAdapters::Column.value_to_decimal(value)
-        else
-          value
-        end
-      end
-
-      def i18n_number_to_native_format(value)
-        native = '.'
-        delimiter = I18n.t('number.format.delimiter')
-        separator = I18n.t('number.format.separator')
-        return value if value.blank? || !value.is_a?(String)
-        unless delimiter == native && !value.include?(separator) && value !~ /\.\d{3}$/
-          value.gsub(/[^0-9\-#{I18n.t('number.format.separator')}]/, '').gsub(I18n.t('number.format.separator'), native)
         else
           value
         end
@@ -344,11 +332,11 @@ module ActiveScaffold
       
       # NOTE: we must use :include in the count query, because some conditions may reference other tables
       count_query = append_to_query(beginning_of_chain, options)
-      count = count_query.count
+      count = Rails::VERSION::MAJOR < 4 ? count_query.count(:distinct => true) : count_query.distinct.count
   
       # Converts count to an integer if ActiveRecord returned an OrderedHash
       # that happens when find_options contains a :group key
-      count = count.length if count.is_a? ActiveSupport::OrderedHash
+      count = count.length if count.is_a?(Hash) || count.is_a?(ActiveSupport::OrderedHash)
       count
     end
 
@@ -366,21 +354,34 @@ module ActiveScaffold
         count = count_items(find_options, options[:count_includes])
       end
 
-      klass = beginning_of_chain
+      # where(nil) is called to ensure we get a relation
+      # even when beginning_of_chain is overrided
+      # so we can call to_a in sort_by :method
+      # it's needed when using outer_joins because
+      # calling uniq on associations (nested scaffolds) send SQL to DB
+      query = beginning_of_chain.where(nil) 
+      query = query.uniq if find_options[:outer_joins].present? # where(nil) is needed because calling uniq on associations (nested scaffolds) send SQL to DB
+      query = append_to_query(query, find_options)
       # we build the paginator differently for method- and sql-based sorting
       if options[:sorting] and options[:sorting].sorts_by_method?
         pager = ::Paginator.new(count, options[:per_page]) do |offset, per_page|
-          sorted_collection = sort_collection_by_column(append_to_query(klass, find_options).all, *options[:sorting].first)
+          calculate_last_modified(query)
+          sorted_collection = sort_collection_by_column(query.to_a, *options[:sorting].first)
           sorted_collection = sorted_collection.slice(offset, per_page) if options[:pagination]
           sorted_collection
         end
       else
         pager = ::Paginator.new(count, options[:per_page]) do |offset, per_page|
-          find_options.merge!(:offset => offset, :limit => per_page) if options[:pagination]
-          append_to_query(klass, find_options)
+          query = append_to_query(query, :offset => offset, :limit => per_page) if options[:pagination]
+          calculate_last_modified(query)
+          query
         end
       end
       pager.page(options[:page])
+    end
+
+    def calculate_last_modified(query)
+      @last_modified = query.maximum(:updated_at) if conditional_get_support? && query.klass.columns_hash['updated_at']
     end
 
     def calculate_query

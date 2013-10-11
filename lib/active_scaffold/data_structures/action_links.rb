@@ -5,6 +5,7 @@ module ActiveScaffold::DataStructures
     def initialize
       @set = []
       @name = :root
+      @weight = 0
     end
 
     # adds an ActionLink, creating one from the arguments if need be
@@ -72,6 +73,7 @@ module ActiveScaffold::DataStructures
       self.each({:include_set => true}) do |link, set|
         if link.action.to_s == val.to_s
           set.delete link
+          break
         end
       end
     end
@@ -80,8 +82,10 @@ module ActiveScaffold::DataStructures
       @set.each do |group|
         if group.name == name
           @set.delete group
+          break
         else
           group.delete_group(name)
+          break
         end if group.is_a?(ActiveScaffold::DataStructures::ActionLinks)
       end
     end
@@ -89,7 +93,7 @@ module ActiveScaffold::DataStructures
     # iterates over the links, possibly by type
     def each(options = {}, &block)
       method = options[:reverse] ? :reverse_each : :each
-      @set.send(method) do |item|
+      @set.sort_by(&:weight).send(method) do |item|
         if item.is_a?(ActiveScaffold::DataStructures::ActionLinks) && !options[:groups]
           item.each(options, &block)
         else
@@ -148,6 +152,7 @@ module ActiveScaffold::DataStructures
     end
 
     attr_accessor :name
+    attr_accessor :weight
 
     protected
 

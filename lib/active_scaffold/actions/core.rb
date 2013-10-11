@@ -7,6 +7,7 @@ module ActiveScaffold::Actions
         after_filter :clear_storage
         rescue_from ActiveScaffold::RecordNotAllowed, ActiveScaffold::ActionNotAllowed, :with => :deny_access
       end
+      base.helper_method :successful?
       base.helper_method :nested?
       base.helper_method :calculate_query
       base.helper_method :new_model
@@ -20,8 +21,12 @@ module ActiveScaffold::Actions
     end
     
     protected
+    def loading_embedded?
+      @loading_embedded ||= params.delete(:embedded)
+    end
+
     def embedded?
-      @embedded ||= params.delete(:embedded)
+      params[:eid]
     end
 
     def nested?
@@ -52,10 +57,16 @@ module ActiveScaffold::Actions
             hash = params[:record]
             id = params[:id]
           end
-          @record = id ? find_if_allowed(id, :update) : new_model
-          @record = update_record_from_params(@record, @main_columns, hash)
-        else
+
+          # check permissions and support overriding to_param
+          id = find_if_allowed(id, :update).id if id
+          # call update_record_from_params with new_model
+          # in other case some associations can be saved
           @record = new_model
+          @record = update_record_from_params(@record, @main_columns, hash)
+          @record.id = id
+        else
+          @record = params[:id] ? find_if_allowed(params[:id], :update) : new_model
           value = column_value_from_param_value(@record, @column, params.delete(:value))
           @record.send "#{@column.name}=", value
         end
@@ -180,12 +191,34 @@ module ActiveScaffold::Actions
       model.respond_to?(:build) ? model.build(build_options || {}) : model.new
     end
 
+    def objects_for_etag
+      @record
+    end
+
+    def view_stale?
+      objects = objects_for_etag
+      if objects.is_a?(Array)
+        args = {:etag => objects.to_a}
+        args[:last_modified] = @last_modified if @last_modified
+      elsif objects.is_a?(Hash)
+        args = {:last_modified => @last_modified}.merge(objects)
+      else
+        args = objects
+      end
+      stale?(args)
+    end
+
+    def conditional_get_support?
+      request.get? && active_scaffold_config.conditional_get_support
+    end
+
     private
     def respond_to_action(action)
+      return unless !conditional_get_support? || view_stale?
       respond_to do |type|
         action_formats.each do |format|
           type.send(format) do
-            if respond_to?(method_name = "#{action}_respond_to_#{format}")
+            if respond_to?(method_name = "#{action}_respond_to_#{format}", true)
               send(method_name)
             end
           end

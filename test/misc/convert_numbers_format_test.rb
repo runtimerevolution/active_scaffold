@@ -1,14 +1,16 @@
-require File.join(File.dirname(__FILE__), '../test_helper.rb')
+require 'test_helper'
 
 class NumberModel < ActiveRecord::Base
+  include ActiveScaffold::ActiveRecordPermissions::ModelUserAccess::Model
   abstract_class = true
   def self.columns
     @columns ||= [ActiveRecord::ConnectionAdapters::Column.new('number', '', 'double(10,2)')]
   end
 end
 
-class AttributeParamsTest < Test::Unit::TestCase
+class ConvertNumbersFormatTest < Test::Unit::TestCase
   include ActiveScaffold::AttributeParams
+  include ActiveScaffold::Finder
 
   def setup
     I18n.backend.store_translations :en, :number => {:format => {
@@ -27,9 +29,7 @@ class AttributeParamsTest < Test::Unit::TestCase
     }}
 
     @config = config_for('number_model')
-    class << @config.list.columns
-      include ActiveScaffold::DataStructures::ActionColumns::AfterConfiguration
-    end
+    @config.columns[:number].form_ui = nil
     @config.list.columns.set_columns @config.columns
   end
 

@@ -282,11 +282,6 @@ document.observe("dom:loaded", function() {
     Element[element.value == 'REPLACE' ? 'hide' : 'show'](element.next('span'));
     return true;
   });
-  document.on("click", "a[data-popup]", function(event, element) {
-    if (event.stopped) return;
-    window.open($(element).href);
-    event.stop();
-  });
   document.on("click", ".hover_click", function(event, element) {
     var ul_element = element.down('ul');
     if (ul_element.getStyle('display') === 'none') {
@@ -600,7 +595,7 @@ var ActiveScaffold = {
     var toggler = toggable.previous();
     var initial_label = (options.default_visible === true) ? options.hide_label : options.show_label;
     
-    toggler.insert(' (<a class="visibility-toggle" href="#">' + initial_label + '</a>)');
+    toggler.insert(' <a class="visibility-toggle" href="#">' + initial_label + '</a>');
     toggler.firstDescendant().observe('click', function(event) {
       var element = event.element();
       event.stop();
@@ -628,11 +623,14 @@ var ActiveScaffold = {
   
   render_form_field: function(source, content, options) {
     var source = $(source);
-    var element = source.up('.association-record');
+    var element = source.up('.association-record'), selector = '';
     if (typeof(element) === 'undefined') {
       element = source.up('ol.form');
+      selector = 'li';
     }
-    element = element.down('.' + options.field_class);
+    // find without entering new subforms
+    selector = options.is_subform ? '' : selector + ':not(.sub-form) ';
+    element = element.down(selector + '.' + options.field_class);
 
     if (element) {
       if (options.is_subform == false) {
@@ -941,7 +939,7 @@ ActiveScaffold.ActionLink.Abstract = Class.create({
 ActiveScaffold.Actions.Record = Class.create(ActiveScaffold.Actions.Abstract, {
   instantiate_link: function(link) {
     var l = new ActiveScaffold.ActionLink.Record(link, this.target, this.loading_indicator);
-    if (this.target.hasAttribute('data-refresh') && !this.target.readAttribute('data-refresh').blank()) l.refresh_url = this.target.readAttribute('data-refresh');
+    if (this.target.hasAttribute('data-refresh') && !this.target.readAttribute('data-refresh').blank()) l.refresh_url = this.target.up('.records').readAttribute('data-refresh-record').replace('--ID--', this.target.readAttribute('data-refresh'));
     
     if (l.position) {
       l.url = l.url.append_params({adapter: '_list_inline_adapter'});
@@ -969,6 +967,7 @@ ActiveScaffold.ActionLink.Record = Class.create(ActiveScaffold.ActionLink.Abstra
       this.hide_target = true;
     }
 
+    var colspan = this.target.childElements().length;
     if (this.position == 'after') {
       this.target.insert({after:content});
       this.set_adapter(this.target.next());
@@ -980,6 +979,8 @@ ActiveScaffold.ActionLink.Record = Class.create(ActiveScaffold.ActionLink.Abstra
     else {
       return false;
     }
+    this.adapter.down('.inline-adapter-cell').writeAttribute('colspan', colspan);
+    ActiveScaffold.focus_first_element_of_form(this.adapter);
     ActiveScaffold.highlight(this.adapter.down('td').down());
   },
 
@@ -1048,6 +1049,7 @@ ActiveScaffold.ActionLink.Table = Class.create(ActiveScaffold.ActionLink.Abstrac
     else {
       throw 'Unknown position "' + this.position + '"'
     }
+    ActiveScaffold.focus_first_element_of_form(this.adapter);
     ActiveScaffold.highlight(this.adapter.down('td').down());
   },
 });

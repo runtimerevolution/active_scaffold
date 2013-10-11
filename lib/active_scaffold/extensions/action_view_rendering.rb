@@ -66,11 +66,11 @@ module ActionView::Helpers #:nodoc:
         id = "as_#{eid}-embedded"
         url_options = {:controller => remote_controller.to_s, :action => 'index'}.merge(options[:params])
 
-        if controller.respond_to?(:render_component_into_view)
+        if controller.respond_to?(:render_component_into_view, true)
           controller.send(:render_component_into_view, url_options)
         else
-          content_tag(:div, :id => id, :class => 'active-scaffold-component') do
-            url = url_for(url_options)
+          url = url_for(url_options)
+          content_tag(:div, :id => id, :class => 'active-scaffold-component', :data => {:refresh => url}) do
             # parse the ActiveRecord model name from the controller path, which
             # might be a namespaced controller (e.g., 'admin/admins')
             model = remote_controller.to_s.sub(/.*\//, '').singularize
@@ -80,7 +80,7 @@ module ActionView::Helpers #:nodoc:
             if ActiveScaffold.js_framework == :prototype
               javascript_tag("new Ajax.Updater('#{id}', '#{url}', {method: 'get', evalScripts: true});")
             elsif ActiveScaffold.js_framework == :jquery
-              javascript_tag("jQuery('##{id}').load('#{url}', function() { $(this).trigger('as:element_updated'); });")
+              javascript_tag("jQuery('##{id}').load('#{url}', function() { jQuery(this).trigger('as:element_updated'); });")
             end
           end
         end
@@ -93,7 +93,10 @@ module ActionView::Helpers #:nodoc:
 
         options = args[1] || {}
         options[:locals] ||= {}
-        options[:locals] = view_stack.last[:locals].merge!(options[:locals]) if view_stack.last && view_stack.last[:locals]
+        if view_stack.last
+          options[:locals] = view_stack.last[:locals].merge!(options[:locals]) if view_stack.last[:locals]
+          options[:object] ||= view_stack.last[:object] if view_stack.last[:object]
+        end
         options[:template] = template
         # if prefix is active_scaffold_overrides we must try to render with this prefix in following paths
         if prefix != 'active_scaffold_overrides'
@@ -109,10 +112,12 @@ module ActionView::Helpers #:nodoc:
       else
         @_view_paths ||= lookup_context.view_paths.clone
         last_template = lookup_context.last_template
-        if args.first.is_a?(Hash)
-          current_view = {:locals => args.first[:locals]}
-          view_stack << current_view
+        if args[0].is_a?(Hash)
+          current_view = {:locals => args[0][:locals], :object => args[0][:object]}
+        else # call is render 'partial', locals_hash
+          current_view = {:locals => args[1]}
         end
+        view_stack << current_view if current_view
         lookup_context.view_paths = @_view_paths # reset view_paths in case a view render :super, and then render :partial
         result = render_without_active_scaffold(*args, &block)
         view_stack.pop if current_view.present?

@@ -35,8 +35,9 @@ module ActiveScaffold::DataStructures
       direction ||= 'ASC'
       direction = direction.to_s.upcase
       column = get_column(column_name)
+      raise ArgumentError, "Could not find column #{column_name}" if column.nil?
       raise ArgumentError, "Sorting direction unknown" unless [:ASC, :DESC].include? direction.to_sym
-      @clauses << [column, direction.untaint] if column and column.sortable?
+      @clauses << [column, direction.untaint] if column.sortable?
       raise ArgumentError, "Can't mix :method- and :sql-based sorting" if mixed_sorting?
     end
 
@@ -66,6 +67,13 @@ module ActiveScaffold::DataStructures
       clause = get_clause(column)
       return if clause.nil?
       clause[1]
+    end
+
+    SORTING_STAGES = Hash[%w(reset ASC DESC reset).each_cons(2).map{|a|a}].freeze
+    DEFAULT_SORTING_STAGES = Hash[%w(ASC DESC ASC).each_cons(2).map{|a|a}].freeze
+    def next_sorting_of(column, sorted_by_default)
+      stages = sorted_by_default ? DEFAULT_SORTING_STAGES : SORTING_STAGES
+      stages[direction_of(column)] || 'ASC'
     end
 
     # checks whether any column is configured to sort by method (using a proc)

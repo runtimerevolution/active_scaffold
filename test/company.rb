@@ -1,14 +1,10 @@
-require 'rubygems'
-require 'active_record'
-require 'active_record/reflection'
-require File.join(File.dirname(__FILE__), '../../lib/bridges/dependent_protect/lib/dependent_protect_bridge')
-
-# Mocking everything necesary to test the plugin.
-class Company
+class Company < ActiveRecord::Base
   def initialize(with_or_without = nil)
     @with_companies = with_or_without == :with_companies
     @with_company = with_or_without == :with_company
     @with_main_company = with_or_without == :with_main_company
+    @attributes = {}
+    @attributes_cache = {}
   end
   
   def self.columns_hash
@@ -43,22 +39,25 @@ class Company
   def self.before_destroy(s=nil)
     @@before = s
   end
-  
-  include ActiveRecord::Reflection
-  include DependentProtectSecurity
+
+  if method(:create_reflection).arity == 4
+    def self.create_reflection(macro, name, scope, options, active_record)
+      super(macro, name, options, active_record)
+    end
+  end
   
   def self.has_many(association_id, options = {})
-    reflection = create_reflection(:has_many, association_id, options, self)
+    reflection = create_reflection(:has_many, association_id, nil, options, self)
   end
   def self.has_one(association_id, options = {})
-    reflection = create_reflection(:has_one, association_id, options, self)
+    reflection = create_reflection(:has_one, association_id, nil, options, self)
   end
   def self.belongs_to(association_id, options = {})
-    reflection = create_reflection(:belongs_to, association_id, options, self)
+    reflection = create_reflection(:belongs_to, association_id, nil, options, self)
   end
-  has_many :companies, :dependent => :protect
-  has_one :company, :dependent => :protect
-  belongs_to :main_company, :dependent => :protect, :class_name => 'Company'
+  has_many :companies
+  has_one :company
+  belongs_to :main_company, :class_name => 'Company'
   
   def companies
     if @with_companies
@@ -77,5 +76,13 @@ class Company
   end
   
   def name
+  end
+
+  def date
+    Date.today
+  end
+
+  def datetime
+    Time.now
   end
 end

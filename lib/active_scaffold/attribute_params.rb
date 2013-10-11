@@ -48,18 +48,21 @@ module ActiveScaffold
       end
 
       columns.each :for => parent_record, :crud_type => crud_type, :flatten => true do |column|
-        # Set any passthrough parameters that may be associated with this column (ie, file column "keep" and "temp" attributes)
-        unless column.params.empty?
-          column.params.each{|p| parent_record.send("#{p}=", attributes[p]) if attributes.has_key? p}
-        end
+        begin
+          # Set any passthrough parameters that may be associated with this column (ie, file column "keep" and "temp" attributes)
+          unless column.params.empty?
+            column.params.each{|p| parent_record.send("#{p}=", attributes[p]) if attributes.has_key? p}
+          end
 
-        if multi_parameter_attributes.has_key? column.name
-          parent_record.send(:assign_multiparameter_attributes, multi_parameter_attributes[column.name])
-        elsif attributes.has_key? column.name
-          value = column_value_from_param_value(parent_record, column, attributes[column.name]) 
-
-          # we avoid assigning a value that already exists because otherwise has_one associations will break (AR bug in has_one_association.rb#replace)
-          parent_record.send("#{column.name}=", value) unless parent_record.send(column.name) == value
+          if multi_parameter_attributes.has_key? column.name
+            parent_record.send(:assign_multiparameter_attributes, multi_parameter_attributes[column.name])
+          elsif attributes.has_key? column.name
+            value = column_value_from_param_value(parent_record, column, attributes[column.name]) 
+            parent_record.send("#{column.name}=", value)
+          end
+        rescue
+          logger.error "#{$!.class.name}: #{$!.message} -- on the ActiveScaffold column = :#{column.name} for #{parent_record.inspect} with value #{value.inspect}"
+          raise
         end
       end
 
@@ -93,7 +96,7 @@ module ActiveScaffold
     def column_value_from_param_value(parent_record, column, value)
       # convert the value, possibly by instantiating associated objects
       form_ui = column.form_ui || column.column.try(:type)
-      if form_ui && self.respond_to?("column_value_for_#{form_ui}_type")
+      if form_ui && self.respond_to?("column_value_for_#{form_ui}_type", true)
         self.send("column_value_for_#{form_ui}_type", parent_record, column, value)
       elsif value.is_a?(Hash)
         column_value_from_param_hash_value(parent_record, column, value)
@@ -131,8 +134,8 @@ module ActiveScaffold
         end
       elsif column.plural_association?
         column_plural_assocation_value_from_value(column, Array(value))
-      elsif column.number? && [:i18n_number, :currency].include?(column.options[:format]) && column.form_ui != :number
-        self.class.i18n_number_to_native_format(value)
+      elsif column.number? && column.options[:format] && column.form_ui != :number
+        column.number_to_native(value)
       else
         # convert empty strings into nil. this works better with 'null => true' columns (and validations),
         # and 'null => false' columns should just convert back to an empty string.
@@ -151,16 +154,7 @@ module ActiveScaffold
     end
 
     def column_value_from_param_hash_value(parent_record, column, value)
-      # this is just for backwards compatibility. we should clean this up in 2.0.
-      if column.form_ui == :select
-        ids = if column.singular_association?
-          value[:id]
-        else
-          value.values.collect {|hash| hash[:id]}
-        end
-        (ids and not ids.empty?) ? column.association.klass.find(ids) : nil
-
-      elsif column.singular_association?
+      if column.singular_association?
         manage_nested_record_from_params(parent_record, column, value)
       elsif column.plural_association?
         # HACK to be able to delete all associated records, hash will include "0" => ""
@@ -212,16 +206,20 @@ module ActiveScaffold
         next true if column and ignore_column_types.include?(column.type)
 
         # defaults are pre-filled on the form. we can't use them to determine if the user intends a new row.
-        next true if column and value == column.default.to_s
+        next true if value == column_default_value(column_name, klass, column)
 
         if value.is_a?(Hash)
           attributes_hash_is_empty?(value, klass)
         elsif value.is_a?(Array)
-          value.any? {|id| id.respond_to?(:empty?) ? !id.empty? : true}
+          value.all?(&:blank?)
         else
           value.respond_to?(:empty?) ? value.empty? : false
         end
       end
+    end
+    
+    def column_default_value(column_name, klass, column)
+      column.default.to_s if column
     end
   end
 end

@@ -14,7 +14,7 @@ module ActiveScaffold
         begin
           # first, check if the dev has created an override for this specific field
           if (method = override_form_field(column))
-            send(method, options[:object] || @record, options)
+            send(method, options[:object] || @record, options.except(:object))
           # second, check if the dev has specified a valid form_ui for this column
           elsif column.form_ui and (method = override_input(column.form_ui))
             send(method, column, options)
@@ -43,21 +43,23 @@ module ActiveScaffold
                 options = active_scaffold_input_text_options(options) if text_types.include?(column.column.type)
                 if column.column.type == :string && options[:maxlength].blank?
                   options[:maxlength] = column.column.limit
-                  options[:size] ||= ActionView::Helpers::InstanceTag::DEFAULT_FIELD_OPTIONS["size"]
+                  options[:size] ||= options[:maxlength].to_i > 30 ? 30 : options[:maxlength]
                 end
                 options[:include_blank] = true if column.column.null and [:date, :datetime, :time].include?(column.column.type)
-                options[:value] = format_number_value((options[:object] || @raecord).send(column.name), column.options) if column.number?
+                options[:value] = format_number_value((options[:object] || @record).send(column.name), column.options) if column.number?
                 text_field(:record, column.name, options.merge(column.options))
               end
             end
           end
         rescue Exception => e
-          logger.error Time.now.to_s + "#{e.inspect} -- on the ActiveScaffold column = :#{column.name} in #{controller.class}"
+          logger.error "#{e.class.name}: #{e.message} -- on the ActiveScaffold column = :#{column.name} in #{controller.class}"
           raise e
         end
       end
       
-      def active_scaffold_render_subform_column(column, scope, crud_type, readonly, add_class = false)
+      def active_scaffold_render_subform_column(column, scope, crud_type, readonly, add_class = false, record = nil)
+        Rails.logger.warn "Relying on @record is deprecated, call active_scaffold_render_subform_column with record. Called from #{caller.first.gsub(/(.*:\d+):.*/, '\1')}" if record.nil? # TODO Remove when relying on @record is removed
+        record ||= @record # TODO Remove when relying on @record is removed
         if add_class
           col_class = []
           col_class << 'required' if column.required?
@@ -66,12 +68,12 @@ module ActiveScaffold
           col_class << 'checkbox' if column.form_ui == :checkbox
           col_class = col_class.join(' ')
         end
-        unless readonly and not @record.new_record? or not @record.authorized_for?(:crud_type => crud_type, :column => column.name)
-          render_column(column, @record, column_renders_as(column), scope, false, col_class)
+        unless readonly and not record.new_record? or not record.authorized_for?(:crud_type => crud_type, :column => column.name)
+          render_column(column, record, column_renders_as(column), scope, false, col_class)
         else
           options = active_scaffold_input_options(column, scope).except(:name)
           options[:class] = "#{options[:class]} #{col_class}" if col_class
-          content_tag :span, get_column_value(@record, column), options
+          content_tag :span, get_column_value(record, column), options
         end
       end
 
@@ -93,7 +95,7 @@ module ActiveScaffold
         options[:placeholder] = column.placeholder if column.placeholder.present?
 
         # Fix for keeping unique IDs in subform
-        id_control = "record_#{column.name}_#{[params[:eid], params[:id]].compact.join '_'}"
+        id_control = "record_#{column.name}_#{[params[:eid], params[:parent_id] || params[:id]].compact.join '_'}"
         id_control += scope_id(scope) if scope
         
         classes = "#{column.name}-input"
@@ -103,19 +105,24 @@ module ActiveScaffold
       end
 
       def update_columns_options(column, scope, options)
+        record = options[:object]
+        Rails.logger.warn "Relying on @record is deprecated, call update_columns_options with record. Called from #{caller.first.gsub(/(.*:\d+):.*/, '\1')}" if record.nil? # TODO Remove when relying on @record is removed
+        record ||= @record # TODO Remove when relying on @record is removed
         form_action = if scope
-          subform_controller = controller.class.active_scaffold_controller_for(@record.class)
+          subform_controller = controller.class.active_scaffold_controller_for(record.class)
           subform_controller.active_scaffold_config.subform
         elsif [:new, :create, :edit, :update, :render_field].include? params[:action].to_sym
-          active_scaffold_config.send(@record.new_record? ? :create : :update)
+          active_scaffold_config.send(record.new_record? ? :create : :update)
         end
         if form_action && column.update_columns && (column.update_columns & form_action.columns.names).present?
-          url_params = {:action => 'render_field', :column => column.name, :id => nil}
-          url_params[:id] = @record.id if column.send_form_on_update_column
+          url_params = params_for(:action => 'render_field', :column => column.name, :id => record.to_param)
+          url_params = url_params.except(:parent_scaffold, :association, nested.param_name) if nested? && scope
           url_params[:eid] = params[:eid] if params[:eid]
           if scope
+            url_params[:parent_controller] ||= url_params[:controller]
             url_params[:controller] = subform_controller.controller_path
             url_params[:scope] = scope
+            url_params[:parent_id] = params[:parent_id] || params[:id]
           end
 
           options[:class] = "#{options[:class]} update_form".strip
@@ -132,33 +139,41 @@ module ActiveScaffold
       
       def render_column(column, record, renders_as, scope = nil, only_value = false, col_class = nil)
         if override_form_field_partial?(column)
-          render :partial => override_form_field_partial(column), :locals => { :column => column, :only_value => only_value, :scope => scope, :col_class => col_class }
+          render :partial => override_form_field_partial(column), :locals => { :column => column, :only_value => only_value, :scope => scope, :col_class => col_class, :record => record }
         elsif renders_as == :field || override_form_field?(column)
-          form_attribute(column, record, scope, only_value)
+          form_attribute(column, record, scope, only_value, col_class)
         elsif renders_as == :subform
-          render :partial => 'form_association', :locals => { :column => column, :scope => scope }
+          render :partial => 'form_association', :locals => { :column => column, :scope => scope, :parent_record => record }
         else
           form_hidden_attribute(column, record, scope)
         end
       end
       
       def form_attribute(column, record, scope = nil, only_value = false, col_class = nil)
-        column_options = active_scaffold_input_options(column, scope)
+        column_options = active_scaffold_input_options(column, scope, :object => record)
         attributes = field_attributes(column, record)
         attributes[:class] = "#{attributes[:class]} #{col_class}" if col_class.present?
         field = unless only_value
-          active_scaffold_input_for column, scope, column_options.merge(:object => record)
+          active_scaffold_input_for column, scope, column_options
         else
-          content_tag(:span, get_column_value(@record, column), column_options.except(:name)) <<
-          hidden_field(:record, column.association ? column.association.foreign_key : column.name, column_options.merge(:object => record))
+          content_tag(:span, get_column_value(record, column), column_options.except(:name, :object)) <<
+          hidden_field(:record, column.association ? column.association.foreign_key : column.name, column_options)
         end
         
         content_tag :dl, attributes do
-          %|<dt>#{label_tag column_options[:id], column.label}</dt><dd>#{field}
+          %|<dt>#{label_tag label_for(column, column_options), column.label}</dt><dd>#{field}
 #{loading_indicator_tag(:action => :render_field, :id => params[:id]) if column.update_columns}
 #{content_tag :span, column.description, :class => 'description' if column.description.present?}
 </dd>|.html_safe
         end
+      end
+
+      def label_for(column, options)
+        options[:id] unless column.form_ui == :select && column.plural_association?
+      end
+
+      def subform_label(column, hidden)
+        column.label unless hidden
       end
       
       def form_hidden_attribute(column, record, scope = nil)
@@ -218,7 +233,7 @@ module ActiveScaffold
       end
       
       def active_scaffold_checkbox_list(column, select_options, associated_ids, options)
-        html = hidden_field_tag("#{options[:name]}[]", '')
+        html = hidden_field_tag("#{options[:name]}[]", '', :id => nil)
         html << content_tag(:ul, :class => "#{options[:class]} checkbox-list", :id => options[:id]) do
           content = ''.html_safe
           select_options.each_with_index do |option, i|
@@ -391,7 +406,7 @@ module ActiveScaffold
       ##
 
       def column_renders_as(column)
-        if column.is_a? ActiveScaffold::DataStructures::ActionColumns
+        if column.respond_to? :each
           return :subsection
         elsif column.active_record_class.locking_column.to_s == column.name.to_s or column.form_ui == :hidden
           return :hidden
@@ -402,16 +417,17 @@ module ActiveScaffold
         end
       end
 
-      def column_scope(column, scope = nil)
+      def column_scope(column, scope = nil, record = nil)
+        Rails.logger.warn "Relying on @record is deprecated, call column_scope with record. Called from #{caller.first.gsub(/(.*:\d+):.*/, '\1')}" if record.nil? # TODO Remove when relying on @record is removed
         if column.plural_association?
-          "#{scope}[#{column.name}][#{@record.id || generate_temporary_id}]"
+          "#{scope}[#{column.name}][#{record.id || generate_temporary_id(record)}]"
         else
           "#{scope}[#{column.name}]"
         end
       end
 
       def active_scaffold_add_existing_input(options)
-        if ActiveScaffold.js_framework == :prototype && controller.respond_to?(:record_select_config)
+        if ActiveScaffold.js_framework == :prototype && controller.respond_to?(:record_select_config, true)
           remote_controller = active_scaffold_controller_for(record_select_config.model).controller_path
           options.merge!(:controller => remote_controller)
           options.merge!(active_scaffold_input_text_options)
@@ -425,7 +441,7 @@ module ActiveScaffold
       end
 
       def active_scaffold_add_existing_label
-        if controller.respond_to?(:record_select_config)
+        if controller.respond_to?(:record_select_config, true)
           record_select_config.model.model_name.human
         else
           active_scaffold_config.model.model_name.human

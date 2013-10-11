@@ -1,4 +1,25 @@
 class ActiveScaffold::Tableless < ActiveRecord::Base
+  class AssociationScope < ActiveRecord::Associations::AssociationScope
+    def column_for(table_name, column_name)
+      if table_name == klass.table_name
+        klass.columns_hash[column_name]
+      else
+        super
+      end
+    end
+  end
+
+  module Association
+    def self.included(base)
+      base.alias_method_chain :association_scope, :tableless
+    end
+
+    def association_scope_with_tableless
+      @association_scope ||= AssociationScope.new(self).scope if klass < ActiveScaffold::Tableless
+      association_scope_without_tableless
+    end
+  end
+
   class Relation < ActiveRecord::Relation
     attr_reader :conditions
     def initialize(klass, table)
@@ -69,10 +90,10 @@ class ActiveScaffold::Tableless < ActiveRecord::Base
   end
 
   def self.execute_simple_calculation(relation, operation, column_name, distinct)
-    if operation == 'count' && column_name == :all && !distinct
+    if operation == 'count' && [relation.klass.primary_key, :all].include?(column_name)
       find_all(relation).size
     else
-      raise "self.execute_simple_calculation must be implemented in a Tableless model to support #{operation} #{column_name} #{' distinct' if distinct} columns"
+      raise "self.execute_simple_calculation must be implemented in a Tableless model to support #{operation} #{column_name}#{' distinct' if distinct} columns"
     end
   end
 

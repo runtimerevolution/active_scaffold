@@ -108,12 +108,19 @@ module ActiveScaffold::DataStructures
     # supported options:
     #   * for association columns
     #     * :select - displays a simple <select> or a collection of checkboxes to (dis)associate records
-    attr_writer :form_ui
+    def form_ui=(value)
+      self.list_method = nil if @list_ui.nil? && value != @form_ui
+      @form_ui = value
+    end
     def form_ui
       @form_ui
     end
 
-    attr_writer :list_ui
+    def list_ui=(value)
+      self.list_method = nil if value != @list_ui
+      @list_ui = value
+    end
+
     def list_ui
       @list_ui || @form_ui
     end
@@ -170,7 +177,7 @@ module ActiveScaffold::DataStructures
     def includes=(value)
       @includes = case value
         when Array then value 
-        else [value] # automatically convert to an array
+        else value ? [value] : value # not convert nil to [nil]
       end
     end
 
@@ -194,14 +201,18 @@ module ActiveScaffold::DataStructures
     #   search = "CONCAT(a, b)" define your own sql for searching. this should be the "left-side" of a WHERE condition. the operator and value will be supplied by ActiveScaffold.
     #   search = [:a, :b]       searches in both fields
     def search_sql=(value)
-      @search_sql = (value == true || value.is_a?(Proc)) ? value : Array(value)
+      @search_sql = if value
+        (value == true || value.is_a?(Proc)) ? value : Array(value)
+      else
+        value
+      end
     end
     def search_sql
       self.initialize_search_sql if @search_sql === true
       @search_sql
     end
     def searchable?
-      search_sql != false && search_sql != nil
+      !!search_sql
     end
 
     # to modify the default order of columns
@@ -226,7 +237,7 @@ module ActiveScaffold::DataStructures
     attr_writer :show_blank_record
     def show_blank_record?(associated)
       if @show_blank_record
-        return false unless self.association.klass.authorized_for?(:crud_type => :create)
+        return false unless self.association.klass.authorized_for?(:crud_type => :create) and not self.association.options[:readonly]
         self.plural_association? or (self.singular_association? and associated.blank?)
       end
     end
@@ -249,16 +260,16 @@ module ActiveScaffold::DataStructures
     # the association from the ActiveRecord class
     attr_reader :association
     def singular_association?
-      self.association and [:has_one, :belongs_to].include? self.association.macro
+      self.association and !self.association.collection?
     end
     def plural_association?
-      self.association and [:has_many, :has_and_belongs_to_many].include? self.association.macro
+      self.association and self.association.collection?
     end
     def through_association?
       self.association and self.association.options[:through]
     end
     def polymorphic_association?
-      self.association and self.association.options.has_key? :polymorphic and self.association.options[:polymorphic]
+      self.association and self.association.options.has_key? :polymorphic # TODO use polymorphic? when rails3 support is removed
     end
     def readonly_association?
       if self.association

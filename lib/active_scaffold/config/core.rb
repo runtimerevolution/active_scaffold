@@ -29,6 +29,18 @@ module ActiveScaffold::Config
     cattr_accessor :cache_action_link_urls
     @@cache_action_link_urls = true
 
+    # enable caching of association options
+    cattr_accessor :cache_association_options
+    @@cache_association_options = true
+
+    # enable setting ETag and LastModified on responses and using fresh_when/stale? to respond with 304 and avoid rendering views
+    cattr_accessor :conditional_get_support
+    @@conditional_get_support = false
+
+    # enable saving user settings in session (per_page, limit, page, sort, search params)
+    cattr_accessor :store_user_settings
+    @@store_user_settings = true
+
     # lets you disable the DHTML history
     def self.dhtml_history=(val)
       @@dhtml_history = val
@@ -47,7 +59,7 @@ module ActiveScaffold::Config
     #  * current_user_method - what method on the controller returns the current user. default: :current_user
     #  * default_permission - what the default permission is. default: true
     def self.security
-      ActiveRecordPermissions
+      ActiveScaffold::ActiveRecordPermissions
     end
 
     # columns that should be ignored for every model. these should be metadata columns like change dates, versions, etc.
@@ -98,6 +110,15 @@ module ActiveScaffold::Config
     # enable caching of action link urls
     attr_accessor :cache_action_link_urls
 
+    # enable caching of association options
+    attr_accessor :cache_association_options
+
+    # enable setting ETag and LastModified on responses and using fresh_when/stale? to respond with 304 and avoid rendering views
+    attr_accessor :conditional_get_support
+
+    # enable saving user settings in session (per_page, limit, page, sort, search params)
+    attr_accessor :store_user_settings
+
     # lets you specify whether add a create link for each sti child for a specific controller
     attr_accessor :sti_create_links
     def add_sti_create_links?
@@ -147,6 +168,9 @@ module ActiveScaffold::Config
       @frontend = self.class.frontend
       @theme = self.class.theme
       @cache_action_link_urls = self.class.cache_action_link_urls
+      @cache_association_options = self.class.cache_association_options
+      @conditional_get_support = self.class.conditional_get_support
+      @store_user_settings = self.class.store_user_settings
       @sti_create_links = self.class.sti_create_links
 
       # inherit from the global set of action links
@@ -157,8 +181,6 @@ module ActiveScaffold::Config
 
     # To be called after your finished configuration
     def _load_action_columns
-      #ActiveScaffold::DataStructures::ActionColumns.class_eval {include ActiveScaffold::DataStructures::ActionColumns::AfterConfiguration}
-
       # then, register the column objects
       self.actions.each do |action_name|
         action = self.send(action_name)
