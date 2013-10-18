@@ -132,7 +132,7 @@ module ActiveScaffold
         end
         value
       end
-      
+
       def condition_value_for_datetime(column, value, conversion = :to_time)
         if value.is_a? Hash
           Time.zone.local(*[:year, :month, :day, :hour, :minute, :second].collect {|part| value[part].to_i}) rescue nil
@@ -184,7 +184,7 @@ module ActiveScaffold
           value
         end
       end
-      
+
       def datetime_conversion_for_condition(column)
         if column.column
           column.column.type == :date ? :to_date : :to_time
@@ -192,7 +192,7 @@ module ActiveScaffold
           :to_time
         end
       end
-            
+
       def condition_for_datetime(column, value, like_pattern = nil)
         conversion = datetime_conversion_for_condition(column)
         from_value = condition_value_for_datetime(column, value[:from], conversion)
@@ -216,7 +216,7 @@ module ActiveScaffold
           ["%{search_sql} = ?", value]
         end
       end
-      
+
       def condition_for_null_type(column, value, like_pattern = nil)
         case value.to_sym
         when :null
@@ -256,8 +256,8 @@ module ActiveScaffold
       'null',
       'not_null'
     ]
-    
-    
+
+
 
     def self.included(klass)
       klass.extend ClassMethods
@@ -279,7 +279,7 @@ module ActiveScaffold
     def active_scaffold_habtm_joins
       @active_scaffold_habtm_joins ||= []
     end
-    
+
     attr_writer :active_scaffold_outer_joins
     def active_scaffold_outer_joins
       @active_scaffold_outer_joins ||= []
@@ -294,7 +294,7 @@ module ActiveScaffold
         active_scaffold_session_storage[:conditions] # embedding conditions (weaker constraints)
       ].reject(&:blank?)
     end
-    
+
     # returns a single record (the given id) but only if it's allowed for the specified security options.
     # security options can be a hash for authorized_for? method or a value to check as a :crud_type
     # accomplishes this by checking model.#{action}_authorized?
@@ -320,7 +320,7 @@ module ActiveScaffold
                          :outer_joins => active_scaffold_outer_joins,
                          :includes => full_includes,
                          :select => options[:select]}
-    
+
       finder_options.merge! custom_finder_options
       finder_options
     end
@@ -329,11 +329,11 @@ module ActiveScaffold
       count_includes ||= find_options[:includes] unless find_options[:conditions].blank?
       options = find_options.reject{|k,v| [:select, :reorder].include? k}
       options[:includes] = count_includes
-      
+
       # NOTE: we must use :include in the count query, because some conditions may reference other tables
       count_query = append_to_query(beginning_of_chain, options)
       count = Rails::VERSION::MAJOR < 4 ? count_query.count(:distinct => true) : count_query.distinct.count
-  
+
       # Converts count to an integer if ActiveRecord returned an OrderedHash
       # that happens when find_options contains a :group key
       count = count.length if count.is_a?(Hash) || count.is_a?(ActiveSupport::OrderedHash)
@@ -348,7 +348,7 @@ module ActiveScaffold
       options[:page] ||= 1
 
       find_options = finder_options(options)
-      
+
       # NOTE: we must use :include in the count query, because some conditions may reference other tables
       if options[:pagination] && options[:pagination] != :infinite
         count = count_items(find_options, options[:count_includes])
@@ -359,8 +359,8 @@ module ActiveScaffold
       # so we can call to_a in sort_by :method
       # it's needed when using outer_joins because
       # calling uniq on associations (nested scaffolds) send SQL to DB
-      query = beginning_of_chain.where(nil) 
-      query = query.uniq if find_options[:outer_joins].present? # where(nil) is needed because calling uniq on associations (nested scaffolds) send SQL to DB
+      query = beginning_of_chain.where(nil)
+      #query = query.uniq if find_options[:outer_joins].present? # where(nil) is needed because calling uniq on associations (nested scaffolds) send SQL to DB
       query = append_to_query(query, find_options)
       # we build the paginator differently for method- and sql-based sorting
       if options[:sorting] and options[:sorting].sorts_by_method?
@@ -397,12 +397,12 @@ module ActiveScaffold
       end
       active_scaffold_config.model.where(primary_key => subquery)
     end
-    
+
     def append_to_query(query, options)
       options.assert_valid_keys :where, :select, :group, :reorder, :limit, :offset, :joins, :outer_joins, :includes, :lock, :readonly, :from, :conditions
       query = apply_conditions(query, *options[:conditions]) if options[:conditions]
       options.reject{|k, v| k == :conditions || v.blank?}.inject(query) do |query, (k, v)|
-        query.send((k.to_sym), v) 
+        query.send((k.to_sym), v)
       end
     end
 
@@ -416,7 +416,7 @@ module ActiveScaffold
           []
       end + active_scaffold_habtm_joins
     end
-    
+
     def apply_conditions(query, *conditions)
       conditions.reject(&:blank?).inject(query) do |query, condition|
         if condition.is_a?(Array) && !condition.first.is_a?(String) # multiple conditions
