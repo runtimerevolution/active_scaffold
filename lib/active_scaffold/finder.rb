@@ -98,7 +98,11 @@ module ActiveScaffold
       def condition_for_range(column, value, like_pattern = nil)
         if !value.is_a?(Hash)
           if column.column.nil? || column.column.text?
-            ["%{search_sql} #{ActiveScaffold::Finder.like_operator} ?", like_pattern.sub('?', value)]
+            if value.is_a?(Array)
+              ["%{search_sql} IN ('#{value.join('\',\'')}')", ]
+            else
+              ["%{search_sql} #{ActiveScaffold::Finder.like_operator} ?", like_pattern.sub('?', value)]
+            end
           else
             ["%{search_sql} = ?", column.column.type_cast(value)]
           end
