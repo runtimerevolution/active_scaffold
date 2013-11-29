@@ -64,7 +64,7 @@ module ActiveScaffold::Bridges
         # because the object may change (someone may log in or out). So we give ActiveRecord a proc that ties to the
         # current_ability_method on this ApplicationController.
         def assign_current_ability_to_models
-          ::ActiveRecord::Base.current_ability_proc = proc {send(:current_ability)}
+          Thread.current[:current_ability_proc] = proc {send(:current_ability)}
         end
       end
 
@@ -77,7 +77,7 @@ module ActiveScaffold::Bridges
 
           # Class-level access to the current ability
           def current_ability
-            ::ActiveRecord::Base.current_ability_proc.call if ::ActiveRecord::Base.current_ability_proc
+            Thread.current[:current_ability_proc].call if Thread.current[:current_ability_proc]
           end
         end
 
